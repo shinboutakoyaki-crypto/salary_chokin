@@ -166,6 +166,9 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="main">
   <div id="tab-dashboard" class="tab-content active">
     <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-outlined btn-sm" onclick="resetAllData()" style="flex:1;justify-content:center;border-color:var(--red);color:var(--red)">
+        🗑️ 全データ削除
+      </button>
       <button class="btn btn-outlined btn-sm" onclick="exportBackup()" style="flex:1;justify-content:center">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         バックアップ保存
@@ -453,6 +456,14 @@ tr:active td{background:rgba(56,189,248,.05);}
           <button onclick="setCsvMode('rakuten')" id="csvBtn_rakuten" class="btn btn-outlined btn-sm" style="flex-direction:column;padding:10px 6px;gap:3px;font-size:11px">🟠 楽天証券<span style="font-size:9px;color:var(--text3)">国内株</span></button>
           <button onclick="setCsvMode('rakuten_us')" id="csvBtn_rakuten_us" class="btn btn-outlined btn-sm" style="flex-direction:column;padding:10px 6px;gap:3px;font-size:11px">🟠 楽天証券<span style="font-size:9px;color:var(--text3)">米国株</span></button>
           <button onclick="setCsvMode('sbi')" id="csvBtn_sbi" class="btn btn-outlined btn-sm" style="flex-direction:column;padding:10px 6px;gap:3px;font-size:11px">🔵 SBI証券<span style="font-size:9px;color:var(--text3)">国内・米国</span></button>
+        </div>
+        <div style="margin-top:10px">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:6px">口座種別を選んでください👇</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="csvAcct_nisa" onclick="selectCsvAccount('nisa')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🌱 新NISA</button>
+            <button type="button" id="csvAcct_tokutei" onclick="selectCsvAccount('tokutei')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">📋 特定口座</button>
+            <button type="button" id="csvAcct_ippan" onclick="selectCsvAccount('ippan')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">📝 一般口座</button>
+          </div>
         </div>
       </div>
       <div id="csvModeHint" style="display:none;background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);"></div>
@@ -1186,6 +1197,17 @@ function renderDivChart() {
 
 let _selectedBroker='';
 let _selectedAccount='';
+let _csvAccount='tokutei';
+function selectCsvAccount(acct){
+  _csvAccount=acct;
+  ['nisa','tokutei','ippan'].forEach(a=>{
+    const b=el('csvAcct_'+a);
+    if(b)b.style.background='';
+  });
+  if(acct==='nisa')el('csvAcct_nisa').style.background='rgba(74,222,128,.2)';
+  else if(acct==='tokutei')el('csvAcct_tokutei').style.background='rgba(56,189,248,.2)';
+  else el('csvAcct_ippan').style.background='rgba(148,163,184,.15)';
+}
 function selectAccount(acct){
   _selectedAccount=acct;
   ['nisa','tokutei','ippan'].forEach(a=>{
@@ -1525,23 +1547,32 @@ function parseCsvDivFile(file) {
 
 function importCsvTrades(){
   if(!csvImportData?.length)return;
-  const cnt=csvImportData.length;
-  S.trades.push(...csvImportData);
+  // 重複チェック：同日・同銘柄・同数量・同単価は除外
+  const key=t=>`${t.date}_${t.ticker}_${t.qty}_${t.price}_${t.type}`;
+  const existing=new Set(S.trades.map(key));
+  const toAdd=csvImportData
+    .map(t=>({...t,account:t.account||_csvAccount}))
+    .filter(t=>!existing.has(key(t)));
+  const skipped=csvImportData.length-toAdd.length;
+  S.trades.push(...toAdd);
   S.trades.sort((a,b)=>new Date(a.date)-new Date(b.date));
   save();closeModal('csvModal');
   el('csvPreview').innerHTML='';el('csvActions').style.display='none';
   csvImportData=null;renderAll();
-  alert(`✅ ${cnt}件の取引をインポートしました`);
+  alert(`✅ ${toAdd.length}件インポート${skipped?` / ${skipped}件は重複のためスキップ`:''}しました`);
 }
 
 function importCsvDivs(){
   if(!csvDivData?.length)return;
-  const cnt=csvDivData.length;
-  S.dividends.push(...csvDivData);
+  const key=d=>`${d.date}_${d.ticker}_${d.amount}`;
+  const existing=new Set(S.dividends.map(key));
+  const toAdd=csvDivData.filter(d=>!existing.has(key(d)));
+  const skipped=csvDivData.length-toAdd.length;
+  S.dividends.push(...toAdd);
   save();closeModal('csvDivModal');
   el('csvDivPreview').innerHTML='';el('csvDivActions').style.display='none';
   csvDivData=null;renderAll();
-  alert(`✅ ${cnt}件の配当データをインポートしました`);
+  alert(`✅ ${toAdd.length}件インポート${skipped?` / ${skipped}件は重複のためスキップ`:''}しました`);
 }
 
 // ===================== STOCK SPLIT =====================
@@ -1617,6 +1648,13 @@ function applySplit() {
 }
 
 // ===================== BACKUP / RESTORE =====================
+function resetAllData(){
+  if(!confirm('⚠️ 全ての取引・配当・アラートデータを削除します。\nバックアップは取りましたか？'))return;
+  if(!confirm('本当に削除しますか？この操作は元に戻せません。'))return;
+  S.trades=[];S.dividends=[];S.alerts=[];S.prices={};S.pnlHistory=[];S.lastUpdated=null;
+  save();renderAll();
+  alert('✅ 全データを削除しました');
+}
 function exportBackup() {
   const data = JSON.stringify(S, null, 2);
   const blob = new Blob([data], {type: 'application/json'});
