@@ -518,31 +518,26 @@ function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 async function fetchPrice(ticker,market){
   const sym=market==='JP'?ticker+'.T':ticker;
   // タイムアウト付きfetch
-  const fetchWithTimeout=(url,ms=5000)=>{
+  const fetchWithTimeout=(url,ms=4000)=>{
     const ctrl=new AbortController();
     const id=setTimeout(()=>ctrl.abort(),ms);
     return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(id));
   };
-  const tryV8=async()=>{
+  const tryYahoo=async(host)=>{
     try{
-      const r=await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)}`,5000);
-      const d=await r.json();
-      const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      return p?parseFloat(p):null;
-    }catch(e){return null;}
-  };
-  const tryV7=async()=>{
-    try{
-      const r=await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)}`,5000);
+      const r=await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://${host}/v8/finance/chart/${sym}?interval=1d&range=5d`)}`,4000);
+      if(!r.ok)return null;
       const d=await r.json();
       const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice||d?.chart?.result?.[0]?.meta?.chartPreviousClose;
       return p?parseFloat(p):null;
     }catch(e){return null;}
   };
   return (async()=>{
-    let p=await tryV8();
-    if(p)return p;
-    p=await tryV7();
+    const p=await Promise.race([
+      tryYahoo('query1.finance.yahoo.com'),
+      tryYahoo('query2.finance.yahoo.com'),
+      new Promise(r=>setTimeout(()=>r(null),4500))
+    ]);
     return p;
   })();
 }
@@ -550,6 +545,11 @@ async function fetchPrice(ticker,market){
 async function refreshPrices(){
   const btn=el('refreshBtn'),icon=el('refreshIcon');
   btn.disabled=true;icon.classList.add('spin');
+  // 全体タイムアウト60秒
+  const globalTimeout=setTimeout(()=>{
+    btn.disabled=false;icon.classList.remove('spin');
+    S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
+  },60000);
   const h=computeHoldings();
   const keys=[...new Set([...Object.keys(h),...S.alerts.map(a=>a.market+'_'+a.ticker)])];
   // 5件ずつ並列取得
@@ -563,6 +563,7 @@ async function refreshPrices(){
     }));
     if(i+chunkSize<keys.length)await sleep(300);
   }
+  clearTimeout(globalTimeout);
   S.lastUpdated=new Date().toISOString();snapPnl();save();
   btn.disabled=false;icon.classList.remove('spin');
   updateUpdated();renderAll();
@@ -762,7 +763,10 @@ function renderHoldings(){
             <div style="font-size:12px;font-weight:700;color:var(--text2)">この銘柄の累計損益</div>
             <div class="mono ${totalColor}" style="font-size:16px;font-weight:800">${(total>=0?'+':'-')+'¥'+Math.abs(Math.round(total)).toLocaleString()}</div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
+          <div style="margin-top:10px">
+            <button class="btn btn-sm" style="font-size:10px;padding:5px 10px;width:100%;background:${hd.account==='nisa'?'rgba(74,222,128,.2)':hd.account==='tokutei'?'rgba(56,189,248,.15)':'rgba(148,163,184,.1)'};color:${hd.account==='nisa'?'#4ade80':hd.account==='tokutei'?'#38bdf8':'var(--text3)'};border:1px solid currentColor;border-radius:8px;margin-bottom:8px" onclick="cycleAccount('${k}');event.stopPropagation()">${hd.account==='nisa'?'🌱 新NISA':hd.account==='tokutei'?'📋 特定口座':'📝 一般/未設定'}　👆タップで変更</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:2px">
             <button class="btn btn-outlined btn-sm" style="flex:1;justify-content:center" onclick="prefillTrade('${hd.ticker}','${hd.market}','${hd.name.replace(/'/g,'')}');event.stopPropagation()">追加購入</button>
             <button class="btn btn-danger btn-sm" style="flex:1;justify-content:center" onclick="prefillTradeSell('${hd.ticker}','${hd.market}','${hd.name.replace(/'/g,'')}');event.stopPropagation()">売却入力</button>
           </div>
@@ -1648,6 +1652,17 @@ function applySplit() {
 }
 
 // ===================== BACKUP / RESTORE =====================
+function cycleAccount(k){
+  const h=computeHoldings();
+  const hd=h[k];
+  if(!hd)return;
+  const order=['','tokutei','nisa','ippan'];
+  const cur=hd.account||'';
+  const next=order[(order.indexOf(cur)+1)%order.length];
+  // この銘柄の全取引のaccountを更新
+  S.trades.forEach(t=>{if(t.market+'_'+t.ticker===k)t.account=next;});
+  save();renderHoldings();renderSummary();
+}
 function resetAllData(){
   if(!confirm('⚠️ 全ての取引・配当・アラートデータを削除します。\nバックアップは取りましたか？'))return;
   if(!confirm('本当に削除しますか？この操作は元に戻せません。'))return;
