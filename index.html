@@ -309,6 +309,25 @@ tr:active td{background:rgba(56,189,248,.05);}
   </button>
 </nav>
 
+<!-- ACCOUNT MODAL -->
+<div class="modal-overlay" id="accountModal">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-header"><h2 class="modal-title">口座種別を選択</h2></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:14px 16px;font-size:14px" onclick="setAccount('nisa')">
+        <span style="font-size:20px">🌱</span><div style="text-align:left"><div>新NISA</div><div style="font-size:11px;color:var(--text3)">非課税口座</div></div>
+      </button>
+      <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:14px 16px;font-size:14px" onclick="setAccount('tokutei')">
+        <span style="font-size:20px">📋</span><div style="text-align:left"><div>特定口座</div><div style="font-size:11px;color:var(--text3)">源泉徴収あり（20.315%）</div></div>
+      </button>
+      <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:14px 16px;font-size:14px" onclick="setAccount('ippan')">
+        <span style="font-size:20px">📝</span><div style="text-align:left"><div>一般口座</div><div style="font-size:11px;color:var(--text3)">確定申告が必要（20.315%）</div></div>
+      </button>
+      <button class="btn btn-ghost" onclick="closeModal('accountModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- TRADE MODAL -->
 <div class="modal-overlay" id="tradeModal">
   <div class="modal">
@@ -508,66 +527,98 @@ let csvImportData=null,csvDivData=null;
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
 function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 
-async async function fetchPrice(ticker,market){
-  const sym=market==='JP'?ticker+'.T':ticker;
-  const tryOne=async(host)=>{
-    try{
-      const ctrl=new AbortController();
-      const tid=setTimeout(()=>ctrl.abort(),4000);
-      const url=`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://${host}/v8/finance/chart/${sym}?interval=1d&range=5d`)}`;
-      const r=await fetch(url,{signal:ctrl.signal});
-      clearTimeout(tid);
-      if(!r.ok)return null;
-      const d=await r.json();
-      const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice||d?.chart?.result?.[0]?.meta?.chartPreviousClose;
-      return p&&p>0?parseFloat(p):null;
-    }catch(e){return null;}
-  };
-  // query1とquery2を同時に試して先に返った方を使う
-  const p=await Promise.any([
-    tryOne('query1.finance.yahoo.com'),
-    tryOne('query2.finance.yahoo.com')
-  ]).catch(()=>null);
-  return p??null;
+function fetchPrice(ticker,market){
+  var sym=market==='JP'?ticker+'.T':ticker;
+  function tryOne(host){
+    return new Promise(function(resolve){
+      var ctrl=new AbortController();
+      var tid=setTimeout(function(){ctrl.abort();resolve(null);},4000);
+      var url='https://api.allorigins.win/raw?url='+encodeURIComponent('https://'+host+'/v8/finance/chart/'+sym+'?interval=1d&range=5d');
+      fetch(url,{signal:ctrl.signal}).then(function(r){
+        clearTimeout(tid);
+        if(!r.ok){resolve(null);return null;}
+        return r.json();
+      }).then(function(d){
+        if(!d){resolve(null);return;}
+        var meta=d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
+        var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
+        resolve(p&&p>0?parseFloat(p):null);
+      }).catch(function(){clearTimeout(tid);resolve(null);});
+    });
+  }
+  return new Promise(function(resolve){
+    var done=false;
+    var pending=2;
+    function onResult(p){
+      if(done)return;
+      if(p!==null){done=true;resolve(p);return;}
+      pending--;
+      if(pending===0){done=true;resolve(null);}
+    }
+    tryOne('query1.finance.yahoo.com').then(onResult);
+    tryOne('query2.finance.yahoo.com').then(onResult);
+  });
 }
 
-async function refreshPrices(){
-  const btn=el('refreshBtn'),icon=el('refreshIcon');
+function refreshPrices(){
+  var btn=el('refreshBtn'),icon=el('refreshIcon');
   btn.disabled=true;icon.classList.add('spin');
-  // 全体タイムアウト60秒
-  const globalTimeout=setTimeout(()=>{
+  var globalTimeout=setTimeout(function(){
     btn.disabled=false;icon.classList.remove('spin');
     S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
-  },60000);
-  const h=computeHoldings();
-  const keys=[...new Set([...Object.keys(h),...S.alerts.map(a=>a.market+'_'+a.ticker)])];
-  // 3件ずつ並列取得
-  const chunkSize=3;
-  const failed=[];
-  for(let i=0;i<keys.length;i+=chunkSize){
-    const chunk=keys.slice(i,i+chunkSize);
-    await Promise.all(chunk.map(async k=>{
-      const [market,...tp]=k.split('_');const ticker=tp.join('_');
-      const p=await fetchPrice(ticker,market);
-      if(p!==null)S.prices[k]=p;
-      else failed.push(k);
-    }));
-    if(i+chunkSize<keys.length)await sleep(500);
+  },90000);
+  var h=computeHoldings();
+  var allKeys=Object.keys(h);
+  S.alerts.forEach(function(a){
+    var k=a.market+'_'+a.ticker;
+    if(allKeys.indexOf(k)<0)allKeys.push(k);
+  });
+  var keys=allKeys;
+  var chunkSize=3;
+  var failed=[];
+  function processChunk(i){
+    if(i>=keys.length){
+      // 失敗した銘柄を1件ずつリトライ
+      retryFailed(0);
+      return;
+    }
+    var chunk=keys.slice(i,i+chunkSize);
+    var promises=chunk.map(function(k){
+      var parts=k.split('_');
+      var market=parts[0];
+      var ticker=parts.slice(1).join('_');
+      return fetchPrice(ticker,market).then(function(p){
+        if(p!==null)S.prices[k]=p;
+        else failed.push(k);
+      });
+    });
+    Promise.all(promises).then(function(){
+      setTimeout(function(){processChunk(i+chunkSize);},500);
+    });
   }
-  // 失敗した銘柄を1件ずつ再試行
-  for(const k of failed){
-    await sleep(300);
-    const [market,...tp]=k.split('_');const ticker=tp.join('_');
-    const p=await fetchPrice(ticker,market);
-    if(p!==null)S.prices[k]=p;
+  function retryFailed(i){
+    if(i>=failed.length){
+      clearTimeout(globalTimeout);
+      S.lastUpdated=new Date().toISOString();snapPnl();save();
+      btn.disabled=false;icon.classList.remove('spin');
+      updateUpdated();renderAll();
+      return;
+    }
+    var k=failed[i];
+    var parts=k.split('_');
+    var market=parts[0];
+    var ticker=parts.slice(1).join('_');
+    setTimeout(function(){
+      fetchPrice(ticker,market).then(function(p){
+        if(p!==null)S.prices[k]=p;
+        retryFailed(i+1);
+      });
+    },300);
   }
-  clearTimeout(globalTimeout);
-  S.lastUpdated=new Date().toISOString();snapPnl();save();
-  btn.disabled=false;icon.classList.remove('spin');
-  updateUpdated();renderAll();
+  processChunk(0);
 }
 
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 
 function snapPnl(){
   const h=computeHoldings();
@@ -1732,24 +1783,5 @@ const today=()=>new Date().toISOString().split('T')[0];
 
 load();renderAll();
 </script>
-
-<!-- 口座種別選択モーダル -->
-<div id="accountModal" class="modal-overlay" onclick="if(event.target===this)closeModal('accountModal')">
-  <div class="modal" style="max-width:320px">
-    <div class="modal-header"><h2 class="modal-title">口座種別を選択</h2></div>
-    <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
-      <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:14px 16px;font-size:14px" onclick="setAccount('nisa')">
-        <span style="font-size:20px">🌱</span><div style="text-align:left"><div>新NISA</div><div style="font-size:11px;color:var(--text3)">非課税口座</div></div>
-      </button>
-      <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:14px 16px;font-size:14px" onclick="setAccount('tokutei')">
-        <span style="font-size:20px">📋</span><div style="text-align:left"><div>特定口座</div><div style="font-size:11px;color:var(--text3)">源泉徴収あり（20.315%）</div></div>
-      </button>
-      <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:14px 16px;font-size:14px" onclick="setAccount('ippan')">
-        <span style="font-size:20px">📝</span><div style="text-align:left"><div>一般口座</div><div style="font-size:11px;color:var(--text3)">確定申告が必要（20.315%）</div></div>
-      </button>
-      <button class="btn btn-ghost" onclick="closeModal('accountModal')">キャンセル</button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
