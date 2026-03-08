@@ -329,6 +329,14 @@ tr:active td{background:rgba(56,189,248,.05);}
             <button type="button" id="broker_other" onclick="selectBroker('')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">— なし</button>
           </div>
         </div>
+        <div class="form-group full">
+          <label class="form-label">口座種別</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="acct_nisa" onclick="selectAccount('nisa')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🌱 新NISA</button>
+            <button type="button" id="acct_tokutei" onclick="selectAccount('tokutei')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">📋 特定口座</button>
+            <button type="button" id="acct_ippan" onclick="selectAccount('ippan')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">📝 一般口座</button>
+          </div>
+        </div>
         <div class="form-group full"><label class="form-label">メモ</label><input type="text" id="t_memo" class="form-input" placeholder="購入理由など"></div>
       </div>
       <div class="form-actions">
@@ -498,44 +506,32 @@ function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 
 async function fetchPrice(ticker,market){
   const sym=market==='JP'?ticker+'.T':ticker;
-  // v8エンドポイント(メイン)
+  // タイムアウト付きfetch
+  const fetchWithTimeout=(url,ms=5000)=>{
+    const ctrl=new AbortController();
+    const id=setTimeout(()=>ctrl.abort(),ms);
+    return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(id));
+  };
   const tryV8=async()=>{
     try{
-      const r=await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)}`);
+      const r=await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)}`,5000);
       const d=await r.json();
       const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
       return p?parseFloat(p):null;
     }catch(e){return null;}
   };
-  // v7エンドポイント(フォールバック)
   const tryV7=async()=>{
     try{
-      const r=await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)}`);
+      const r=await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)}`,5000);
       const d=await r.json();
       const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice||d?.chart?.result?.[0]?.meta?.chartPreviousClose;
       return p?parseFloat(p):null;
-    }catch(e){return null;}
-  };
-  // stooq(フォールバック2: 日本株のみ)
-  const tryStooq=async()=>{
-    if(market!=='JP')return null;
-    try{
-      const sym2=ticker.toLowerCase()+'.jp';
-      const r=await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://stooq.com/q/l/?s=${sym2}&f=sd2t2ohlcv&h&e=csv`)}`);
-      const text=await r.text();
-      const lines=text.trim().split('\n');
-      if(lines.length<2)return null;
-      const cols=lines[1].split(',');
-      const p=parseFloat(cols[4]); // Close価格
-      return p>0?p:null;
     }catch(e){return null;}
   };
   return (async()=>{
     let p=await tryV8();
     if(p)return p;
     p=await tryV7();
-    if(p)return p;
-    p=await tryStooq();
     return p;
   })();
 }
@@ -545,11 +541,16 @@ async function refreshPrices(){
   btn.disabled=true;icon.classList.add('spin');
   const h=computeHoldings();
   const keys=[...new Set([...Object.keys(h),...S.alerts.map(a=>a.market+'_'+a.ticker)])];
-  for(const k of keys){
-    const [market,...tp]=k.split('_');const ticker=tp.join('_');
-    const p=await fetchPrice(ticker,market);
-    if(p!==null)S.prices[k]=p;
-    await sleep(300);
+  // 5件ずつ並列取得
+  const chunkSize=5;
+  for(let i=0;i<keys.length;i+=chunkSize){
+    const chunk=keys.slice(i,i+chunkSize);
+    await Promise.all(chunk.map(async k=>{
+      const [market,...tp]=k.split('_');const ticker=tp.join('_');
+      const p=await fetchPrice(ticker,market);
+      if(p!==null)S.prices[k]=p;
+    }));
+    if(i+chunkSize<keys.length)await sleep(300);
   }
   S.lastUpdated=new Date().toISOString();snapPnl();save();
   btn.disabled=false;icon.classList.remove('spin');
@@ -580,8 +581,9 @@ function computeHoldings(){
   const sorted=[...S.trades].sort((a,b)=>new Date(a.date)-new Date(b.date));
   for(const t of sorted){
     const k=t.market+'_'+t.ticker;
-    if(!h[k])h[k]={ticker:t.ticker,market:t.market,name:t.name||t.ticker,qty:0,totalCost:0,avgCost:0,realizedPnl:0,broker:t.memo||''};
+    if(!h[k])h[k]={ticker:t.ticker,market:t.market,name:t.name||t.ticker,qty:0,totalCost:0,avgCost:0,realizedPnl:0,broker:t.memo||'',account:t.account||''};
     if(t.memo&&!h[k].broker)h[k].broker=t.memo;
+    if(t.account&&!h[k].account)h[k].account=t.account;
     const hd=h[k];
     if(t.type==='buy'){hd.totalCost+=t.qty*t.price+(t.fee||0);hd.qty+=t.qty;hd.avgCost=hd.qty>0?hd.totalCost/hd.qty:0;}
     else{const pnl=(t.price-hd.avgCost)*t.qty-(t.fee||0);t.realizedPnl=pnl;hd.realizedPnl+=pnl;hd.qty=Math.max(0,hd.qty-t.qty);hd.totalCost=hd.qty*hd.avgCost;}
@@ -604,18 +606,44 @@ function renderSummary(){
   let tC=0,tV=0,tR=0;
   for(const k in h){const hd=h[k],p=S.prices[k]||hd.avgCost;tC+=hd.avgCost*hd.qty;tV+=p*hd.qty;tR+=hd.realizedPnl;}
   const unr=tV-tC,unrP=tC>0?(unr/tC)*100:0;
-  const tDiv=S.dividends.reduce((s,d)=>s+d.amount,0);
-  const tRwithDiv = tR + tDiv; // 実現損益＋配当
+  // 税引後計算（新NISAは非課税、特定・一般は20.315%）
+  let tR_after=0;
+  for(const k in h){
+    const hd=h[k];
+    const rate=taxRate(hd.account);
+    const pnl=hd.realizedPnl||0;
+    tR_after+=pnl>0?pnl*(1-rate):pnl;
+  }
+  const tDiv=S.dividends.reduce((s,d)=>{
+    // 配当の口座種別はtickerから銘柄のaccountを参照
+    const k=d.market+'_'+d.ticker;
+    const hd=h[k];
+    const rate=taxRate(hd?.account||'tokutei');
+    return s+d.amount*(1-rate);
+  },0);
+  const tDivRaw=S.dividends.reduce((s,d)=>s+d.amount,0);
+  const tRwithDiv = tR_after + tDiv; // 税引後実現損益＋税引後配当
   const tot=unr+tR+tDiv;
   el('summaryGrid').innerHTML=`
     <div class="summary-card wide"><div class="s-label">評価額合計</div><div class="s-value accent-c">${fmtJP(tV)}</div><div class="s-sub">取得額 ${fmtJP(tC)}</div></div>
     <div class="summary-card"><div class="s-label">含み損益</div><div class="s-value sm ${clr(unr)}">${sign(unr)}${fmtJP(unr)}</div><div class="s-sub">${pct(unrP)}</div></div>
-    <div class="summary-card"><div class="s-label">実現損益＋配当</div><div class="s-value sm ${clr(tRwithDiv)}">${sign(tRwithDiv)}${fmtJP(tRwithDiv)}</div><div class="s-sub">売却益＋受取配当</div></div>
+    <div class="summary-card"><div class="s-label">実現損益＋配当<small style="font-size:9px;color:var(--text3)">（税引後）</small></div><div class="s-value sm ${clr(tRwithDiv)}">${sign(tRwithDiv)}${fmtJP(tRwithDiv)}</div><div class="s-sub">売却益＋受取配当</div></div>
     <div class="summary-card"><div class="s-label">累計配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(tDiv)}</div><div class="s-sub">税引前</div></div>
     <div class="summary-card"><div class="s-label">総合損益</div><div class="s-value sm ${clr(tot)}">${sign(tot)}${fmtJP(tot)}</div><div class="s-sub">含み+実現+配当</div></div>
   `;
 }
 
+function taxRate(account){
+  // 新NISAは非課税、特定・一般は20.315%
+  if(account==='nisa')return 0;
+  return 0.20315;
+}
+function accountBadge(account){
+  if(account==='nisa')return '<span style="font-size:9px;background:rgba(74,222,128,.2);color:#4ade80;border-radius:4px;padding:2px 5px;flex-shrink:0">NISA</span>';
+  if(account==='tokutei')return '<span style="font-size:9px;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:4px;padding:2px 5px;flex-shrink:0">特定</span>';
+  if(account==='ippan')return '<span style="font-size:9px;background:rgba(148,163,184,.15);color:var(--text3);border-radius:4px;padding:2px 5px;flex-shrink:0">一般</span>';
+  return '';
+}
 function brokerBadge(broker){
   if(!broker)return '';
   if(broker.includes('楽天'))return '<span style="font-size:9px;background:rgba(244,67,54,.25);color:#ef5350;border-radius:4px;padding:2px 5px;flex-shrink:0">楽天</span>';
@@ -660,6 +688,7 @@ function renderHoldings(){
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
               <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:16px">${hd.ticker}</span>
               ${brokerBadge(hd.broker)}
+              ${accountBadge(hd.account)}
               <span style="font-size:13px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hd.name||''}</span>
             </div>
             <div style="font-size:12px;color:var(--text3)">
@@ -766,7 +795,13 @@ function renderTrades(){
 function renderDividends(){
   const sorted=[...S.dividends].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const total=S.dividends.reduce((s,d)=>s+d.amount,0);
-  const afterTax=S.dividends.reduce((s,d)=>s+d.amount*(1-(d.tax||20.315)/100),0);
+  const h=computeHoldings();
+  const afterTax=S.dividends.reduce((s,d)=>{
+    const k=d.market+'_'+d.ticker;
+    const hd=h[k];
+    const rate=taxRate(hd?.account||'tokutei');
+    return s+d.amount*(1-rate);
+  },0);
   const thisYear=S.dividends.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
     <div class="summary-card"><div class="s-label">累計配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(total)}</div><div class="s-sub">税引前</div></div>
@@ -1150,6 +1185,17 @@ function renderDivChart() {
 
 
 let _selectedBroker='';
+let _selectedAccount='';
+function selectAccount(acct){
+  _selectedAccount=acct;
+  ['nisa','tokutei','ippan'].forEach(a=>{
+    const b=el('acct_'+a);
+    if(b)b.style.background='';
+  });
+  if(acct==='nisa')el('acct_nisa').style.background='rgba(74,222,128,.2)';
+  else if(acct==='tokutei')el('acct_tokutei').style.background='rgba(56,189,248,.2)';
+  else if(acct==='ippan')el('acct_ippan').style.background='rgba(148,163,184,.15)';
+}
 function selectBroker(broker){
   _selectedBroker=broker;
   ['rakuten','sbi','other'].forEach(b=>el('broker_'+b).style.background='');
@@ -1162,12 +1208,12 @@ function addTrade(){
   const name=v('t_name').trim(),type=v('t_type');
   const qty=parseFloat(v('t_qty')),price=parseFloat(v('t_price')),fee=parseFloat(v('t_fee'))||0,memo=v('t_memo').trim();
   if(!date||!ticker||!qty||!price){alert('必須項目（*）を入力してください');return;}
-  S.trades.push({date,market,ticker,name,type,qty,price,fee,memo:_selectedBroker||memo});
+  S.trades.push({date,market,ticker,name,type,qty,price,fee,memo:_selectedBroker||memo,account:_selectedAccount});
   S.trades.sort((a,b)=>new Date(a.date)-new Date(b.date));
   save();closeModal('tradeModal');
   ['t_ticker','t_name','t_qty','t_price','t_memo'].forEach(id=>el(id).value='');
   el('t_fee').value='0';
-  selectBroker('');
+  selectBroker('');selectAccount('');
   renderAll();
 }
 
