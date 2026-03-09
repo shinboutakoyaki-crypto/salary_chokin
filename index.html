@@ -338,7 +338,7 @@ tr:active td{background:rgba(56,189,248,.05);}
         <div class="form-group"><label class="form-label">日付 *</label><input type="date" id="t_date" class="form-input"></div>
         <div class="form-group"><label class="form-label">市場 *</label><select id="t_market" class="form-select"><option value="JP">🇯🇵 日本株（東証）</option><option value="US">🇺🇸 米国株</option></select></div>
         <div class="form-group"><label class="form-label">コード / ティッカー *</label><input type="text" id="t_ticker" class="form-input" placeholder="7203 / AAPL" oninput="this.value=this.value.toUpperCase()" onblur="autoFillName()"></div>
-        <div class="form-group"><label class="form-label">銘柄名</label><input type="text" id="t_name" class="form-input" placeholder="トヨタ自動車"></div>
+        <div class="form-group"><label class="form-label">銘柄名</label><input type="text" id="t_name" class="form-input" placeholder="銘柄名（任意）"></div>
         <div class="form-group"><label class="form-label">売買 *</label><select id="t_type" class="form-select"><option value="buy">📈 買い</option><option value="sell">📉 売り</option></select></div>
         <div class="form-group"><label class="form-label">株数 *</label><input type="number" id="t_qty" class="form-input" placeholder="100" min="1" inputmode="numeric"></div>
         <div class="form-group"><label class="form-label">単価 *</label><input type="number" id="t_price" class="form-input" placeholder="0" step="0.01" inputmode="decimal"></div>
@@ -1722,21 +1722,29 @@ function setAccount(acct){
   save();closeModal('accountModal');renderHoldings();renderSummary();
 }
 function autoFillName(){
-  var ticker=el('t_ticker').value.trim();
+  var ticker=(el('t_ticker').value||'').trim();
+  if(!ticker)return;
   var nameEl=el('t_name');
-  if(!ticker||nameEl.value)return; // 既に名前が入ってれば何もしない
-  var marketEl=el('t_market');
-  var market=marketEl?marketEl.value:'JP';
+  if(nameEl.value.trim())return; // 既に入力済みならスキップ
+  var market=(el('t_market')||{value:'JP'}).value;
   var syms=market==='JP'?[ticker+'.T',ticker+'.S',ticker+'.N',ticker+'.F']:[ticker];
   nameEl.placeholder='取得中…';
   function trySym(i){
     if(i>=syms.length){nameEl.placeholder='銘柄名（任意）';return;}
-    var url='https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+syms[i]+'?interval=1d&range=1d');
-    fetch(url).then(function(r){return r.json();}).then(function(d){
-      var meta=d&&d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
-      var name=meta&&(meta.longName||meta.shortName);
-      if(name){nameEl.value=name;nameEl.placeholder='銘柄名（任意）';}
-      else trySym(i+1);
+    var proxyUrl='https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+syms[i]+'?interval=1d&range=1d');
+    fetch(proxyUrl).then(function(r){
+      if(!r.ok)throw new Error('ng');
+      return r.json();
+    }).then(function(d){
+      var result=d&&d.chart&&d.chart.result&&d.chart.result[0];
+      var meta=result&&result.meta;
+      var name=meta&&(meta.longName||meta.shortName||'');
+      if(name&&name.length>0){
+        nameEl.value=name;
+        nameEl.placeholder='銘柄名（任意）';
+      }else{
+        trySym(i+1);
+      }
     }).catch(function(){trySym(i+1);});
   }
   trySym(0);
