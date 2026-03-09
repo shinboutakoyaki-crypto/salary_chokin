@@ -842,6 +842,11 @@ function toggleHoldingCard(k){
 }
 
 function prefillTradeSell(ticker,market,name){
+  // フォーム全リセット
+  ['t_ticker','t_name','t_qty','t_price','t_memo'].forEach(id=>el(id).value='');
+  el('t_fee').value='0';
+  selectBroker('');selectAccount('');
+  // 値をセット
   el('t_ticker').value=ticker;el('t_market').value=market;el('t_name').value=name;
   el('t_type').value='sell';
   el('t_date').value=today();openModal('tradeModal');
@@ -1334,6 +1339,11 @@ function delDiv(i){if(!confirm('この配当記録を削除しますか？'))ret
 function delAlert(i){if(!confirm('このアラートを削除しますか？'))return;S.alerts.splice(i,1);save();renderAll();}
 
 function prefillTrade(ticker,market,name){
+  // フォーム全リセット
+  ['t_ticker','t_name','t_qty','t_price','t_memo'].forEach(id=>el(id).value='');
+  el('t_fee').value='0';el('t_type').value='buy';
+  selectBroker('');selectAccount('');
+  // 値をセット
   el('t_ticker').value=ticker;el('t_market').value=market;el('t_name').value=name;
   el('t_date').value=today();openModal('tradeModal');
 }
@@ -1827,7 +1837,15 @@ function importBackup(input) {
 }
 
 function openModal(id){
-  if(id==='tradeModal'&&!el('t_date').value)el('t_date').value=today();
+  if(id==='tradeModal'){
+    // prefillTradeを経由しない直接呼び出し時はフォームをリセット
+    if(!el('t_ticker').value){
+      ['t_ticker','t_name','t_qty','t_price','t_memo'].forEach(function(fid){el(fid).value='';});
+      el('t_fee').value='0';el('t_type').value='buy';
+      selectBroker('');selectAccount('');
+    }
+    if(!el('t_date').value)el('t_date').value=today();
+  }
   if(id==='dividendModal'&&!el('d_date').value)el('d_date').value=today();
   el(id).classList.add('open');document.body.style.overflow='hidden';
 }
