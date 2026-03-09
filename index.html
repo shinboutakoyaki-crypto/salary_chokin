@@ -26,11 +26,11 @@ html,body{height:100%;}
 body{font-family:'Outfit','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);overscroll-behavior:none;}
 
 .topbar{background:rgba(15,23,42,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 18px;padding-top:env(safe-area-inset-top,0);height:calc(58px + env(safe-area-inset-top,0));display:flex;align-items:flex-end;padding-bottom:10px;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:100;}
-.logo{font-size:21px;font-weight:800;letter-spacing:-1px;}
+.logo{font-size:16px;font-weight:800;letter-spacing:-0.5px;white-space:nowrap;}
 .logo-p{color:var(--accent);}
-.topbar-right{display:flex;align-items:center;gap:8px;}
+.topbar-right{display:flex;align-items:center;gap:4px;}
 .updated-text{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
-.refresh-btn{background:linear-gradient(135deg,var(--accent2),#7c3aed);color:#fff;border:none;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;transition:opacity .2s;}
+.refresh-btn{background:linear-gradient(135deg,var(--accent2),#7c3aed);color:#fff;border:none;border-radius:20px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;transition:opacity .2s;}
 .refresh-btn:active{opacity:.7;}
 .refresh-btn:disabled{opacity:.5;}
 
@@ -158,12 +158,12 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="topbar">
   <div class="logo"><span class="logo-p">サラリーマンの</span>貯金箱</div>
   <div class="topbar-right">
-    <span class="updated-text" id="updatedText">--:--</span>
+    <span class="updated-text" id="updatedText" style="display:none">--:--</span>
     <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()">
       <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
       更新
     </button>
-    <button onclick="openModal('menuModal')" style="background:none;border:none;padding:6px 8px;cursor:pointer;color:var(--text2);display:flex;align-items:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+    <button onclick="openModal('menuModal')" style="background:none;border:none;padding:5px 6px;cursor:pointer;color:var(--text2);display:flex;align-items:center;margin-left:2px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   </div>
 </div>
 
@@ -259,7 +259,25 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div id="dividendsBody"></div>
   </div>
 
+  <nav class="bottom-nav">
+  <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    ホーム
+  </button>
+  <button class="nav-item" data-tab="holdings" onclick="switchTab('holdings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+    保有銘柄
+  </button>
+  <button class="nav-item" data-tab="trades" onclick="switchTab('trades')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    取引履歴
+  </button>
+  <button class="nav-item" data-tab="dividends" onclick="switchTab('dividends')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+    配当
+  </button>
   
+</nav>
 
 <!-- ACCOUNT MODAL -->
 <div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
@@ -624,7 +642,7 @@ const pct=v=>(v>=0?'+':'')+v.toFixed(2)+'%';
 const clr=v=>v>0?'up':v<0?'down':'neutral';
 const mkChip=(pos,label)=>`<span class="chip chip-${pos?'up':'down'}">${label}</span>`;
 
-function renderAll(){renderSummary();renderHoldings();renderTrades();renderDividends();renderAlerts();renderCharts();updateUpdated();}
+function renderAll(){renderSummary();renderHoldings();renderTrades();renderDividends();renderCharts();updateUpdated();}
 
 function renderSummary(){
   const h=computeHoldings();
@@ -861,7 +879,7 @@ function renderDividends(){
 
 function renderAlerts(){
   const c=el('alertsContainer');
-  if(!S.alerts.length){c.innerHTML=`<div class="empty"><div class="empty-icon">🔔</div>アラートがありません<br><small>+ ボタンから追加してください</small></div>`;el('alertDot').classList.remove('visible');return;}
+  if(!S.alerts.length){c.innerHTML=`<div class="empty"><div class="empty-icon">🔔</div>アラートがありません<br><small>+ ボタンから追加してください</small></div>`;if(el('alertDot'))el('alertDot').classList.remove('visible');return;}
   let anyAchieved=false;
   c.innerHTML=S.alerts.map((al,i)=>{
     const k=al.market+'_'+al.ticker;
@@ -889,7 +907,7 @@ function renderAlerts(){
       <div style="font-size:10px;color:var(--text3);text-align:right;margin-top:3px">${prog.toFixed(0)}% 達成</div>
     </div>`;
   }).join('');
-  el('alertDot').classList.toggle('visible',anyAchieved);
+  if(el('alertDot'))el('alertDot').classList.toggle('visible',anyAchieved);
 }
 
 let charts={};
@@ -1229,9 +1247,10 @@ function selectCsvAccount(acct){
     const b=el('csvAcct_'+a);
     if(b)b.style.background='';
   });
-  if(acct==='nisa')el('csvAcct_nisa').style.background='rgba(74,222,128,.2)';
-  else if(acct==='tokutei')el('csvAcct_tokutei').style.background='rgba(56,189,248,.2)';
-  else el('csvAcct_ippan').style.background='rgba(148,163,184,.15)';
+  const nb=el('csvAcct_nisa'),tb=el('csvAcct_tokutei'),ib=el('csvAcct_ippan');
+  if(nb)nb.style.background=acct==='nisa'?'rgba(74,222,128,.2)':'';
+  if(tb)tb.style.background=acct==='tokutei'?'rgba(56,189,248,.2)':'';
+  if(ib)ib.style.background=acct==='ippan'?'rgba(148,163,184,.15)':'';
 }
 function selectAccount(acct){
   _selectedAccount=acct;
