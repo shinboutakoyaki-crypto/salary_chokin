@@ -499,40 +499,52 @@ function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(
 function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 
 function fetchPrice(ticker,market){
-  // 市場別サフィックスの候補（東証→札幌→名古屋→福岡の順）
+  // プロキシ複数 + query1/query2 同時リクエストで最速応答を使う
+  var PROXIES=[
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?url=',
+    'https://api.codetabs.com/v1/proxy?quest='
+  ];
   var syms=market==='JP'?[ticker+'.T',ticker+'.S',ticker+'.N',ticker+'.F']:[ticker];
+  function fetchOneUrl(url){
+    return new Promise(function(res){
+      var ctrl=new AbortController();
+      var tid=setTimeout(function(){ctrl.abort();res(null);},5000);
+      fetch(url,{signal:ctrl.signal}).then(function(r){
+        clearTimeout(tid);
+        if(!r.ok){res(null);return null;}
+        return r.json();
+      }).then(function(d){
+        if(!d){res(null);return;}
+        var meta=d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
+        var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
+        res(p&&p>0?parseFloat(p):null);
+      }).catch(function(){clearTimeout(tid);res(null);});
+    });
+  }
   function tryOneSym(sym){
     return new Promise(function(resolve){
       var done=false;
-      var pending=2;
-      function onResult(p){
-        if(done)return;
-        if(p!==null){done=true;resolve(p);return;}
-        pending--;
-        if(pending===0){done=true;resolve(null);}
-      }
-      function fetchOne(host){
-        return new Promise(function(res){
-          var ctrl=new AbortController();
-          var tid=setTimeout(function(){ctrl.abort();res(null);},4000);
-          var url='https://api.allorigins.win/raw?url='+encodeURIComponent('https://'+host+'/v8/finance/chart/'+sym+'?interval=1d&range=5d');
-          fetch(url,{signal:ctrl.signal}).then(function(r){
-            clearTimeout(tid);
-            if(!r.ok){res(null);return null;}
-            return r.json();
-          }).then(function(d){
-            if(!d){res(null);return;}
-            var meta=d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
-            var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
-            res(p&&p>0?parseFloat(p):null);
-          }).catch(function(){clearTimeout(tid);res(null);});
+      var yUrls=[
+        'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=5d',
+        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=5d'
+      ];
+      // 全プロキシ×全ホストを一斉に投げて最速を使う
+      var allUrls=[];
+      PROXIES.forEach(function(px){
+        yUrls.forEach(function(yu){allUrls.push(px+encodeURIComponent(yu));});
+      });
+      var remaining=allUrls.length;
+      allUrls.forEach(function(url){
+        fetchOneUrl(url).then(function(p){
+          if(done)return;
+          if(p!==null){done=true;resolve(p);return;}
+          remaining--;
+          if(remaining===0){done=true;resolve(null);}
         });
-      }
-      fetchOne('query1.finance.yahoo.com').then(onResult);
-      fetchOne('query2.finance.yahoo.com').then(onResult);
+      });
     });
   }
-  // symsを順番に試して最初に取れた価格を返す
   function trySyms(i){
     if(i>=syms.length)return Promise.resolve(null);
     return tryOneSym(syms[i]).then(function(p){
@@ -545,62 +557,61 @@ function fetchPrice(ticker,market){
 function refreshPrices(){
   var btn=el('refreshBtn'),icon=el('refreshIcon');
   btn.disabled=true;icon.classList.add('spin');
+  var h=computeHoldings();
+  var allKeys=Object.keys(h);
+  var keys=allKeys.filter(function(k){return h[k].qty>0;});
+  var total=keys.length;
+  if(total===0){
+    btn.disabled=false;icon.classList.remove('spin');
+    return;
+  }
+  var CHUNK=10; // 10件同時並列
+  var RETRY_MAX=2; // 失敗時の自動リトライ回数
+  var failCount={};
+  var done=0;
   var globalTimeout=setTimeout(function(){
     btn.disabled=false;icon.classList.remove('spin');
     S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
   },90000);
-  var h=computeHoldings();
-  var allKeys=Object.keys(h);
-  S.alerts.forEach(function(a){
-    var k=a.market+'_'+a.ticker;
-    if(allKeys.indexOf(k)<0)allKeys.push(k);
-  });
-  var keys=allKeys;
-  var chunkSize=3;
-  var failed=[];
-  function processChunk(i){
-    if(i>=keys.length){
-      // 失敗した銘柄を1件ずつリトライ
-      retryFailed(0);
-      return;
-    }
-    var chunk=keys.slice(i,i+chunkSize);
-    var promises=chunk.map(function(k){
-      var parts=k.split('_');
-      var market=parts[0];
-      var ticker=parts.slice(1).join('_');
-      return fetchPrice(ticker,market).then(function(p){
-        if(p!==null)S.prices[k]=p;
-        else failed.push(k);
-      });
-    });
-    Promise.all(promises).then(function(){
-      setTimeout(function(){processChunk(i+chunkSize);},500);
-    });
-  }
-  function retryFailed(i){
-    if(i>=failed.length){
+
+  function processChunk(remaining){
+    if(remaining.length===0){
       clearTimeout(globalTimeout);
       S.lastUpdated=new Date().toISOString();snapPnl();save();
       btn.disabled=false;icon.classList.remove('spin');
       updateUpdated();renderAll();
       return;
     }
-    var k=failed[i];
-    var parts=k.split('_');
-    var market=parts[0];
-    var ticker=parts.slice(1).join('_');
-    setTimeout(function(){
-      fetchPrice(ticker,market).then(function(p){
-        if(p!==null)S.prices[k]=p;
-        retryFailed(i+1);
+    var chunk=remaining.slice(0,CHUNK);
+    var next=remaining.slice(CHUNK);
+    var retry=[];
+    var promises=chunk.map(function(k){
+      var parts=k.split('_');
+      var market=parts[0];
+      var ticker=parts.slice(1).join('_');
+      return fetchPrice(ticker,market).then(function(p){
+        if(p!==null){
+          S.prices[k]=p;
+          done++;
+          // 進捗をボタンに表示
+          el('refreshBtn').title=done+'/'+total+'件取得済';
+        } else {
+          failCount[k]=(failCount[k]||0)+1;
+          if(failCount[k]<=RETRY_MAX)retry.push(k); // 自動リトライキューに追加
+        }
       });
-    },300);
+    });
+    Promise.all(promises).then(function(){
+      // リトライ対象を次のチャンクの末尾に追加して再処理
+      setTimeout(function(){processChunk(next.concat(retry));},200);
+    });
   }
-  processChunk(0);
+  processChunk(keys);
 }
 
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+
+
 
 function snapPnl(){
   const h=computeHoldings();
