@@ -163,25 +163,13 @@ tr:active td{background:rgba(56,189,248,.05);}
       <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
       更新
     </button>
+    <button onclick="openModal('menuModal')" style="background:none;border:none;padding:6px 8px;cursor:pointer;color:var(--text2);display:flex;align-items:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   </div>
 </div>
 
 <div class="main">
   <div id="tab-dashboard" class="tab-content active">
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn btn-outlined btn-sm" onclick="resetAllData()" style="flex:1;justify-content:center;border-color:var(--red);color:var(--red)">
-        🗑️ 全データ削除
-      </button>
-      <button class="btn btn-outlined btn-sm" onclick="exportBackup()" style="flex:1;justify-content:center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        バックアップ保存
-      </button>
-      <button class="btn btn-outlined btn-sm" onclick="el('restoreFile').click()" style="flex:1;justify-content:center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        バックアップから復元
-      </button>
-      <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)">
-    </div>
+    
     <div id="summaryGrid" class="summary-grid"></div>
     <div class="card">
       <div class="card-header">
@@ -268,48 +256,13 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
     </div>
     <div id="divSummary" class="summary-grid"></div>
-    <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>受取日</th><th>銘柄</th><th>受取額</th><th>税引後</th><th></th></tr></thead>
-      <tbody id="dividendsBody"></tbody>
-    </table></div></div>
+    <div id="dividendsBody"></div>
   </div>
 
-  <div id="tab-alerts" class="tab-content">
-    <div class="section-header">
-      <div class="section-title">利回りアラート</div>
-      <button class="add-fab" onclick="openModal('alertModal')" style="width:42px;height:42px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
-    </div>
-    <div id="alertsContainer"></div>
-  </div>
-</div>
-
-<nav class="bottom-nav">
-  <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    ホーム
-  </button>
-  <button class="nav-item" data-tab="holdings" onclick="switchTab('holdings')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-    保有銘柄
-  </button>
-  <button class="nav-item" data-tab="trades" onclick="switchTab('trades')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    取引履歴
-  </button>
-  <button class="nav-item" data-tab="dividends" onclick="switchTab('dividends')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-    配当
-  </button>
-  <button class="nav-item" data-tab="alerts" onclick="switchTab('alerts')">
-    <div class="nav-dot" id="alertDot"></div>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-    アラート
-  </button>
-</nav>
+  
 
 <!-- ACCOUNT MODAL -->
+<div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
 <div class="modal-overlay" id="accountModal">
   <div class="modal" style="max-width:320px">
     <div class="modal-header"><h2 class="modal-title">口座種別を選択</h2></div>
@@ -896,19 +849,13 @@ function renderDividends(){
     <div class="summary-card wide"><div class="s-label">今年の配当</div><div class="s-value sm accent-c">${fmtJP(thisYear)}</div><div class="s-sub">${new Date().getFullYear()}年合計</div></div>
   `;
   const tbody=el('dividendsBody');
-  if(!sorted.length){tbody.innerHTML=`<tr><td colspan="5"><div class="empty"><div class="empty-icon">💴</div>配当データがありません</div></td></tr>`;return;}
+  if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">💴</div>配当データがありません</div>`;return;}
   tbody.innerHTML=sorted.map(d=>{
     const idx=S.dividends.indexOf(d);
     const _hdiv=computeHoldings()[d.market+'_'+d.ticker];
     const _ratediv=_hdiv?taxRate(_hdiv.account||'tokutei'):(d.tax||20.315)/100;
     const at=d.amount*(1-_ratediv);
-    return `<tr>
-      <td>${d.date}</td>
-      <td><div class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}">${d.ticker}</div><div class="name-cell">${d.name||''}</div></td>
-      <td class="mono up">${fmtJP(d.amount)}</td>
-      <td class="mono">${fmtJP(at)}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="delDiv(${idx})">🗑</button></td>
-    </tr>`;
+    return `<div class="trade-card"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span><button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:12px">${fmtJP(d.amount)}</span><span style="font-size:11px;color:var(--text3)">→</span><span class="mono" style="font-size:12px">${fmtJP(at)}</span></div></div>`;
   }).join('');
 }
 
