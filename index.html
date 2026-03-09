@@ -201,7 +201,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       <div class="card-header">
         <span class="card-title">💴 配当金推移</span>
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-          <div id="divYearBtns" style="display:flex;gap:3px"></div>
+          <select id="divYearSelect" onchange="setDivYear(parseInt(this.value))" style="padding:4px 8px;font-size:12px;border:1px solid var(--border2);border-radius:8px;background:#f8faff;color:var(--text);font-family:inherit;display:none"></select>
           <button id="divToggle_monthly" class="btn btn-sm btn-primary" onclick="setDivMode('monthly')" style="padding:4px 10px;font-size:11px">月別</button>
           <button id="divToggle_cumulative" class="btn btn-sm btn-ghost" onclick="setDivMode('cumulative')" style="padding:4px 10px;font-size:11px">累計</button>
         </div>
@@ -950,17 +950,16 @@ function setDivYear(y){
   renderDivChart();
 }
 function updateDivYearBtns(){
-  var wrap=el('divYearBtns');
-  if(!wrap)return;
+  var sel=el('divYearSelect');
+  if(!sel)return;
   var years=[];
   S.dividends.forEach(function(d){var y=parseInt(d.date.slice(0,4));if(years.indexOf(y)<0)years.push(y);});
   years.sort();
-  if(!years.length){wrap.innerHTML='';return;}
-  // divYearが範囲外なら最新年に合わせる
+  if(!years.length){sel.style.display='none';return;}
   if(years.indexOf(divYear)<0)divYear=years[years.length-1];
-  wrap.innerHTML=years.map(function(y){
-    var active=y===divYear;
-    return '<button class="btn btn-sm '+(active?'btn-primary':'btn-ghost')+'" onclick="setDivYear('+y+')" style="padding:4px 9px;font-size:11px">'+y+'</button>';
+  sel.style.display='';
+  sel.innerHTML=years.map(function(y){
+    return '<option value="'+y+'"'+(y===divYear?' selected':'')+'>'+y+'年</option>';
   }).join('');
 }
 function setDivMode(mode) {
