@@ -880,14 +880,16 @@ function renderDividends(){
   const thisYear=S.dividends.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
     <div class="summary-card"><div class="s-label">累計配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(total)}</div><div class="s-sub">税引前</div></div>
-    <div class="summary-card"><div class="s-label">税引後累計</div><div class="s-value sm up">${fmtJP(afterTax)}</div><div class="s-sub">約20.3%課税後</div></div>
+    <div class="summary-card"><div class="s-label">税引後累計</div><div class="s-value sm up">${fmtJP(afterTax)}</div><div class="s-sub">口座種別に応じた課税後</div></div>
     <div class="summary-card wide"><div class="s-label">今年の配当</div><div class="s-value sm accent-c">${fmtJP(thisYear)}</div><div class="s-sub">${new Date().getFullYear()}年合計</div></div>
   `;
   const tbody=el('dividendsBody');
   if(!sorted.length){tbody.innerHTML=`<tr><td colspan="5"><div class="empty"><div class="empty-icon">💴</div>配当データがありません</div></td></tr>`;return;}
   tbody.innerHTML=sorted.map(d=>{
     const idx=S.dividends.indexOf(d);
-    const at=d.amount*(1-(d.tax||20.315)/100);
+    const _hdiv=computeHoldings()[d.market+'_'+d.ticker];
+    const _ratediv=_hdiv?taxRate(_hdiv.account||'tokutei'):(d.tax||20.315)/100;
+    const at=d.amount*(1-_ratediv);
     return `<tr>
       <td>${d.date}</td>
       <td><div class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}">${d.ticker}</div><div class="name-cell">${d.name||''}</div></td>
@@ -1630,7 +1632,13 @@ function importCsvDivs(){
   if(!csvDivData?.length)return;
   const key=d=>`${d.date}_${d.ticker}_${d.amount}`;
   const existing=new Set(S.dividends.map(key));
-  const toAdd=csvDivData.filter(d=>!existing.has(key(d)));
+  const h=computeHoldings();
+  const toAdd=csvDivData.filter(d=>!existing.has(key(d))).map(d=>{
+    // NISAの銘柄は税率を0に上書き
+    const hd=h[d.market+'_'+d.ticker];
+    if(hd&&hd.account==='nisa')return Object.assign({},d,{tax:0});
+    return d;
+  });
   const skipped=csvDivData.length-toAdd.length;
   S.dividends.push(...toAdd);
   save();closeModal('csvDivModal');
