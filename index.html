@@ -528,36 +528,47 @@ function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(
 function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 
 function fetchPrice(ticker,market){
-  var sym=market==='JP'?ticker+'.T':ticker;
-  function tryOne(host){
+  // 市場別サフィックスの候補（東証→札幌→名古屋→福岡の順）
+  var syms=market==='JP'?[ticker+'.T',ticker+'.S',ticker+'.N',ticker+'.F']:[ticker];
+  function tryOneSym(sym){
     return new Promise(function(resolve){
-      var ctrl=new AbortController();
-      var tid=setTimeout(function(){ctrl.abort();resolve(null);},4000);
-      var url='https://api.allorigins.win/raw?url='+encodeURIComponent('https://'+host+'/v8/finance/chart/'+sym+'?interval=1d&range=5d');
-      fetch(url,{signal:ctrl.signal}).then(function(r){
-        clearTimeout(tid);
-        if(!r.ok){resolve(null);return null;}
-        return r.json();
-      }).then(function(d){
-        if(!d){resolve(null);return;}
-        var meta=d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
-        var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
-        resolve(p&&p>0?parseFloat(p):null);
-      }).catch(function(){clearTimeout(tid);resolve(null);});
+      var done=false;
+      var pending=2;
+      function onResult(p){
+        if(done)return;
+        if(p!==null){done=true;resolve(p);return;}
+        pending--;
+        if(pending===0){done=true;resolve(null);}
+      }
+      function fetchOne(host){
+        return new Promise(function(res){
+          var ctrl=new AbortController();
+          var tid=setTimeout(function(){ctrl.abort();res(null);},4000);
+          var url='https://api.allorigins.win/raw?url='+encodeURIComponent('https://'+host+'/v8/finance/chart/'+sym+'?interval=1d&range=5d');
+          fetch(url,{signal:ctrl.signal}).then(function(r){
+            clearTimeout(tid);
+            if(!r.ok){res(null);return null;}
+            return r.json();
+          }).then(function(d){
+            if(!d){res(null);return;}
+            var meta=d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
+            var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
+            res(p&&p>0?parseFloat(p):null);
+          }).catch(function(){clearTimeout(tid);res(null);});
+        });
+      }
+      fetchOne('query1.finance.yahoo.com').then(onResult);
+      fetchOne('query2.finance.yahoo.com').then(onResult);
     });
   }
-  return new Promise(function(resolve){
-    var done=false;
-    var pending=2;
-    function onResult(p){
-      if(done)return;
-      if(p!==null){done=true;resolve(p);return;}
-      pending--;
-      if(pending===0){done=true;resolve(null);}
-    }
-    tryOne('query1.finance.yahoo.com').then(onResult);
-    tryOne('query2.finance.yahoo.com').then(onResult);
-  });
+  // symsを順番に試して最初に取れた価格を返す
+  function trySyms(i){
+    if(i>=syms.length)return Promise.resolve(null);
+    return tryOneSym(syms[i]).then(function(p){
+      return p!==null?p:trySyms(i+1);
+    });
+  }
+  return trySyms(0);
 }
 
 function refreshPrices(){
