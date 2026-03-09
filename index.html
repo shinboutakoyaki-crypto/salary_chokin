@@ -25,7 +25,7 @@
 html,body{height:100%;}
 body{font-family:'Outfit','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);overscroll-behavior:none;}
 
-.topbar{background:rgba(15,23,42,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 18px;padding-top:env(safe-area-inset-top,0);height:calc(58px + env(safe-area-inset-top,0));display:flex;align-items:flex-end;padding-bottom:10px;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.topbar{background:rgba(15,23,42,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 18px;padding-top:env(safe-area-inset-top,0);height:calc(58px + env(safe-area-inset-top,0));display:flex;align-items:flex-end;padding-bottom:10px;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:100;}
 .logo{font-size:21px;font-weight:800;letter-spacing:-1px;}
 .logo-p{color:var(--accent);}
 .topbar-right{display:flex;align-items:center;gap:8px;}
@@ -41,7 +41,7 @@ body{font-family:'Outfit','Noto Sans JP',sans-serif;background:var(--bg);color:v
 .nav-dot{position:absolute;top:8px;right:calc(50% - 14px);width:6px;height:6px;background:var(--red);border-radius:50%;display:none;}
 .nav-dot.visible{display:block;}
 
-.main{padding:14px;padding-bottom:calc(68px + var(--safe-bottom) + 14px);max-width:900px;margin:0 auto;}
+.main{padding:14px;padding-top:calc(58px + env(safe-area-inset-top,0) + 14px);padding-bottom:calc(68px + var(--safe-bottom) + 14px);max-width:900px;margin:0 auto;}
 .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
 .section-title{font-size:19px;font-weight:700;}
 
@@ -639,7 +639,7 @@ function updateUpdated(){
 
 function computeHoldings(){
   const h={};
-  const sorted=[...S.trades].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const sorted=[...S.trades].sort((a,b)=>{const d=new Date(a.date)-new Date(b.date);if(d!==0)return d;return a.type==='buy'?-1:b.type==='buy'?1:0;});
   for(const t of sorted){
     const k=t.market+'_'+t.ticker;
     if(!h[k])h[k]={ticker:t.ticker,market:t.market,name:t.name||t.ticker,qty:0,totalCost:0,avgCost:0,realizedPnl:0,broker:t.memo||'',account:t.account||''};
@@ -647,7 +647,7 @@ function computeHoldings(){
     if(t.account&&!h[k].account)h[k].account=t.account;
     const hd=h[k];
     if(t.type==='buy'){hd.totalCost+=t.qty*t.price+(t.fee||0);hd.qty+=t.qty;hd.avgCost=hd.qty>0?hd.totalCost/hd.qty:0;}
-    else{const pnl=(t.price-hd.avgCost)*t.qty-(t.fee||0);t.realizedPnl=pnl;hd.realizedPnl+=pnl;hd.qty=Math.max(0,hd.qty-t.qty);hd.totalCost=hd.qty*hd.avgCost;}
+    else{const pnl=(t.price-(hd.avgCost||t.price))*t.qty-(t.fee||0);t.realizedPnl=pnl;hd.realizedPnl+=pnl;hd.qty=hd.qty-t.qty;if(hd.qty<=0){hd.qty=0;hd.totalCost=0;hd.avgCost=0;}else{hd.totalCost=hd.qty*hd.avgCost;}}
   }
   return h;
 }
