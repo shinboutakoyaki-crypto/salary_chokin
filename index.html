@@ -139,6 +139,9 @@ tr:active td{background:rgba(56,189,248,.05);}
 .holding-card-detail{max-height:0;overflow:hidden;transition:max-height .3s ease;}
 .holding-card-detail.open{max-height:400px;}
 .holding-card-detail-inner{padding:0 16px 14px;border-top:1px solid var(--border);}
+.trade-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;}
+.trade-card-top{display:flex;align-items:center;gap:5px;overflow:hidden;}
+.trade-card-bot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .spin{animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
@@ -248,10 +251,7 @@ tr:active td{background:rgba(56,189,248,.05);}
         </button>
       </div>
     </div>
-    <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>日付</th><th>銘柄</th><th>売買</th><th>株数</th><th>単価</th><th>手数料</th><th>実損益</th><th></th></tr></thead>
-      <tbody id="tradesBody"></tbody>
-    </table></div></div>
+    <div id="tradesBody"></div>
   </div>
 
   <div id="tab-dividends" class="tab-content">
@@ -851,19 +851,26 @@ function prefillTradeSell(ticker,market,name){
 function renderTrades(){
   const sorted=[...S.trades].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const tbody=el('tradesBody');
-  if(!sorted.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-icon">📋</div>取引がありません</div></td></tr>`;return;}
+  if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">📋</div>取引がありません</div>`;return;}
   tbody.innerHTML=sorted.map(t=>{
     const idx=S.trades.indexOf(t);
-    return `<tr>
-      <td>${t.date}</td>
-      <td><div class="ticker ${t.market==='JP'?'ticker-jp':'ticker-us'}">${t.ticker}</div><div class="name-cell">${t.name||''} ${brokerBadge(t.memo)}</div></td>
-      <td>${mkChip(t.type==='buy',t.type==='buy'?'買':'売')}</td>
-      <td class="mono">${t.qty}</td>
-      <td class="mono">${fmtV(t.price,t.market)}</td>
-      <td class="mono">${t.fee||0}</td>
-      <td class="mono ${t.type==='sell'&&t.realizedPnl!==undefined?clr(t.realizedPnl):''}">${t.type==='sell'&&t.realizedPnl!==undefined?sign(t.realizedPnl)+fmtJP(Math.abs(t.realizedPnl)):'—'}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="delTrade(${idx})">🗑</button></td>
-    </tr>`;
+    const hasPnl=t.type==='sell'&&t.realizedPnl!==undefined;
+    return `<div class="trade-card">
+      <div class="trade-card-top">
+        <span class="ticker ${t.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${t.ticker}</span>
+        <span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(t.name||'').slice(0,10)+(t.name&&t.name.length>10?'…':'')}</span>
+        ${brokerBadge(t.memo)}
+        ${accountBadge(t.account)}
+        <button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delTrade(${idx})">🗑</button>
+      </div>
+      <div class="trade-card-bot">
+        <span style="color:var(--text3);font-size:11px">${t.date}</span>
+        ${mkChip(t.type==='buy',t.type==='buy'?'買':'売')}
+        <span class="mono" style="font-size:12px">${t.qty}株</span>
+        <span class="mono" style="font-size:12px">${fmtV(t.price,t.market)}</span>
+        ${hasPnl?`<span class="mono ${clr(t.realizedPnl)}" style="font-size:12px;margin-left:auto">${sign(t.realizedPnl)}${fmtJP(Math.abs(t.realizedPnl))}</span>`:''}
+      </div>
+    </div>`;
   }).join('');
 }
 
