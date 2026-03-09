@@ -200,7 +200,8 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div class="card">
       <div class="card-header">
         <span class="card-title">💴 配当金推移</span>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <div id="divYearBtns" style="display:flex;gap:3px"></div>
           <button id="divToggle_monthly" class="btn btn-sm btn-primary" onclick="setDivMode('monthly')" style="padding:4px 10px;font-size:11px">月別</button>
           <button id="divToggle_cumulative" class="btn btn-sm btn-ghost" onclick="setDivMode('cumulative')" style="padding:4px 10px;font-size:11px">累計</button>
         </div>
@@ -932,6 +933,7 @@ function renderAlerts(){
 let charts={};
 let assetMode='asset'; // 'asset' or 'pnl'
 let divMode='monthly'; // 'monthly' or 'cumulative'
+let divYear=new Date().getFullYear();
 
 function setAssetMode(mode) {
   assetMode = mode;
@@ -942,6 +944,25 @@ function setAssetMode(mode) {
   renderLineChart();
 }
 
+function setDivYear(y){
+  divYear=y;
+  updateDivYearBtns();
+  renderDivChart();
+}
+function updateDivYearBtns(){
+  var wrap=el('divYearBtns');
+  if(!wrap)return;
+  var years=[];
+  S.dividends.forEach(function(d){var y=parseInt(d.date.slice(0,4));if(years.indexOf(y)<0)years.push(y);});
+  years.sort();
+  if(!years.length){wrap.innerHTML='';return;}
+  // divYearが範囲外なら最新年に合わせる
+  if(years.indexOf(divYear)<0)divYear=years[years.length-1];
+  wrap.innerHTML=years.map(function(y){
+    var active=y===divYear;
+    return '<button class="btn btn-sm '+(active?'btn-primary':'btn-ghost')+'" onclick="setDivYear('+y+')" style="padding:4px 9px;font-size:11px">'+y+'</button>';
+  }).join('');
+}
 function setDivMode(mode) {
   divMode = mode;
   el('divToggle_monthly').className = 'btn btn-sm ' + (mode==='monthly'?'btn-primary':'btn-ghost');
@@ -1202,43 +1223,63 @@ function renderStockSummary() {
 }
 
 
+function fmtMan(v){
+  if(v>=10000) return (v/10000).toFixed(1)+'万';
+  if(v>=1000) return (v/1000).toFixed(1)+'千';
+  return v+'円';
+}
 function renderDivChart() {
   killChart('div');
+  updateDivYearBtns();
   if (!S.dividends.length) return;
 
   const sorted = [...S.dividends].sort((a,b)=>a.date.localeCompare(b.date));
 
   if (divMode === 'monthly') {
-    // 月別棒グラフ
+    // 選択年の月別棒グラフ（1〜12月固定表示）
+    const yearStr = String(divYear);
     const monthly = {};
+    for(var m=1;m<=12;m++) monthly[m]=0;
     for (const d of sorted) {
-      const ym = d.date.slice(0,7); // YYYY-MM
-      monthly[ym] = (monthly[ym]||0) + d.amount;
+      if(d.date.slice(0,4)!==yearStr) continue;
+      const mo = parseInt(d.date.slice(5,7));
+      monthly[mo] = (monthly[mo]||0) + d.amount;
     }
-    const labels = Object.keys(monthly).sort();
-    const data = labels.map(k=>Math.round(monthly[k]));
+    const labels = [1,2,3,4,5,6,7,8,9,10,11,12];
+    const data = labels.map(m=>Math.round(monthly[m]));
     const maxVal = Math.max(...data);
+    const total = data.reduce((s,v)=>s+v,0);
+    const months = data.filter(v=>v>0).length;
+    const avg = months>0?Math.round(total/months):0;
+
+    // 月平均をdivSummary下に追記
+    var avgEl=el('divAvgText');
+    if(avgEl)avgEl.textContent='月平均：'+avg.toLocaleString()+' 円';
+
     charts['div']=new Chart(el('divChart'),{
       type:'bar',
       data:{
-        labels:labels.map(l=>l.slice(2)), // YY-MM表示
+        labels:labels,
         datasets:[{
           label:'月間配当',
           data,
-          backgroundColor: data.map(v => v===maxVal ? 'rgba(251,191,36,.9)' : 'rgba(251,191,36,.5)'),
-          borderRadius:5
+          backgroundColor: data.map(v=>v===maxVal&&v>0?'rgba(29,111,232,.85)':'rgba(29,111,232,.4)'),
+          borderRadius:6
         }]
       },
       options:{...cOpts,
-        plugins:{legend:{display:false}},
+        plugins:{
+          legend:{display:false},
+          datalabels:{display:false}
+        },
         scales:{
-          x:{ticks:{color:'#64748b',maxRotation:45,maxTicksLimit:24}},
-          y:{ticks:{color:'#64748b',callback:v=>'¥'+Math.round(v).toLocaleString()},grid:{color:'rgba(29,111,232,.08)'}}
+          x:{ticks:{color:'#334155',font:{size:12}}},
+          y:{ticks:{color:'#64748b',callback:function(v){return fmtMan(v);}},grid:{color:'rgba(29,111,232,.08)'}}
         }
       }
     });
   } else {
-    // 累計折れ線グラフ
+    // 累計折れ線グラフ（全期間）
     let cum = 0;
     const labels = [], data = [];
     for (const d of sorted) {
@@ -1258,7 +1299,7 @@ function renderDivChart() {
       options:{...cOpts,
         scales:{
           x:{ticks:{color:'#64748b',maxRotation:0,maxTicksLimit:10}},
-          y:{ticks:{color:'#64748b',callback:v=>'¥'+Math.round(v).toLocaleString()},grid:{color:'rgba(29,111,232,.08)'}}
+          y:{ticks:{color:'#64748b',callback:function(v){return fmtMan(v);}},grid:{color:'rgba(29,111,232,.08)'}}
         }
       }
     });
