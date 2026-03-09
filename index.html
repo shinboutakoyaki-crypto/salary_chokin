@@ -764,7 +764,7 @@ function renderHoldings(){
               <span style="font-size:12px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">${(hd.name||'').slice(0,8)+(hd.name&&hd.name.length>8?'…':'')}</span>
             </div>
             <div style="font-size:11px;color:var(--text3)">
-              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:'株価未取得'}
+              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red)">株価未取得</span> <button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:2px 7px;border:1px solid var(--text3);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer">手動入力</button>`}
               ${unrP!==null?`<span class="${unrColor}" style="margin-left:4px">(${pct(unrP)})</span>`:''}
             </div>
           </div>
@@ -1720,6 +1720,18 @@ function openAccountModal(k){
 function setAccount(acct){
   S.trades.forEach(t=>{if(t.market+'_'+t.ticker===_accountTargetKey)t.account=acct;});
   save();closeModal('accountModal');renderHoldings();renderSummary();
+}
+function manualPrice(k){
+  var parts=k.split('_');
+  var market=parts[0];
+  var ticker=parts.slice(1).join('_');
+  var cur=S.prices[k]?String(S.prices[k]):'';
+  var val=prompt(ticker+'の現在株価を入力してください（例: 5190）',cur);
+  if(val===null)return;
+  var p=parseFloat(val.replace(/,/g,''));
+  if(isNaN(p)||p<=0){alert('正しい数値を入力してください');return;}
+  S.prices[k]=p;
+  save();renderAll();
 }
 function resetAllData(){
   if(!confirm('⚠️ 全ての取引・配当・アラートデータを削除します。\nバックアップは取りましたか？'))return;
