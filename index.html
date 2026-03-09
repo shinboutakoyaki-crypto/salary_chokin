@@ -206,6 +206,12 @@ tr:active td{background:rgba(56,189,248,.05);}
           <button id="divToggle_cumulative" class="btn btn-sm btn-ghost" onclick="setDivMode('cumulative')" style="padding:4px 10px;font-size:11px">累計</button>
         </div>
       </div>
+      <div id="divYearTotal" style="display:none;padding:8px 16px 0;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,rgba(29,111,232,.07),rgba(29,111,232,.03));border-radius:10px">
+          <span style="font-size:12px;font-weight:700;color:var(--text3)" id="divYearTotalLabel">2024年 合計受取</span>
+          <span style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent)" id="divYearTotalValue">¥0</span>
+        </div>
+      </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="divChart"></canvas></div></div>
     </div>
     <div class="card">
@@ -1255,6 +1261,20 @@ function renderDivChart() {
     var avgEl=el('divAvgText');
     if(avgEl)avgEl.textContent='月平均：'+avg.toLocaleString()+' 円';
 
+    // 年間合計を表示
+    var totalEl=el('divYearTotal');
+    var totalLbl=el('divYearTotalLabel');
+    var totalVal=el('divYearTotalValue');
+    if(totalEl&&totalLbl&&totalVal){
+      if(total>0){
+        totalEl.style.display='';
+        totalLbl.textContent=yearStr+'年 合計受取';
+        totalVal.textContent='¥'+total.toLocaleString();
+      } else {
+        totalEl.style.display='none';
+      }
+    }
+
     charts['div']=new Chart(el('divChart'),{
       type:'bar',
       data:{
@@ -1278,6 +1298,10 @@ function renderDivChart() {
       }
     });
   } else {
+    // 累計モードでは年間合計バーを非表示
+    var totalEl=el('divYearTotal');
+    if(totalEl)totalEl.style.display='none';
+
     // 累計折れ線グラフ（全期間）
     let cum = 0;
     const labels = [], data = [];
