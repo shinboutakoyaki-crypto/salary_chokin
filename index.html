@@ -239,6 +239,9 @@ tr:active td{background:rgba(56,189,248,.05);}
         </button>
       </div>
     </div>
+    <div style="margin-bottom:10px">
+      <input type="text" id="tradesSearch" placeholder="🔍 コード・銘柄名で絞り込み" oninput="renderTrades()" style="width:100%;padding:9px 13px;font-size:14px;border:1px solid var(--border2);border-radius:10px;background:#f8faff;color:var(--text)">
+    </div>
     <div id="tradesBody"></div>
   </div>
 
@@ -839,9 +842,11 @@ function prefillTradeSell(ticker,market,name){
 
 
 function renderTrades(){
-  const sorted=[...S.trades].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  var _sq=el('tradesSearch');var q=_sq?_sq.value.trim().toLowerCase():'';
+  var all=[...S.trades].sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var sorted=q?all.filter(function(t){return (t.ticker||'').toLowerCase().indexOf(q)>=0||(t.name||'').toLowerCase().indexOf(q)>=0;}):all;
   const tbody=el('tradesBody');
-  if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">📋</div>取引がありません</div>`;return;}
+  if(!sorted.length){tbody.innerHTML='<div class="empty"><div class="empty-icon">📋</div>'+(q?'該当なし':'取引がありません')+'</div>';return;}
   tbody.innerHTML=sorted.map(t=>{
     const idx=S.trades.indexOf(t);
     const hasPnl=t.type==='sell'&&t.realizedPnl!==undefined;
