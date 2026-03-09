@@ -560,7 +560,9 @@ function refreshPrices(){
   var h=computeHoldings();
   var allKeys=Object.keys(h);
   var keys=allKeys.filter(function(k){return h[k].qty>0;});
-  var total=keys.length;
+  // holdingKeyからpriceKey（market_ticker）の一意リストを作成
+  var priceKeys=[...new Set(keys.map(function(k){var hd=h[k];return hd.priceKey;}))];
+  var total=priceKeys.length;
   if(total===0){
     btn.disabled=false;icon.classList.remove('spin');
     return;
@@ -585,19 +587,18 @@ function refreshPrices(){
     var chunk=remaining.slice(0,CHUNK);
     var next=remaining.slice(CHUNK);
     var retry=[];
-    var promises=chunk.map(function(k){
-      var parts=k.split('_');
+    var promises=chunk.map(function(pk){
+      var parts=pk.split('_');
       var market=parts[0];
       var ticker=parts.slice(1).join('_');
       return fetchPrice(ticker,market).then(function(p){
         if(p!==null){
-          S.prices[k]=p;
+          S.prices[pk]=p;
           done++;
-          // 進捗をボタンに表示
           el('refreshBtn').title=done+'/'+total+'件取得済';
         } else {
-          failCount[k]=(failCount[k]||0)+1;
-          if(failCount[k]<=RETRY_MAX)retry.push(k); // 自動リトライキューに追加
+          failCount[pk]=(failCount[pk]||0)+1;
+          if(failCount[pk]<=RETRY_MAX)retry.push(pk);
         }
       });
     });
@@ -616,7 +617,7 @@ var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 function snapPnl(){
   const h=computeHoldings();
   let unr=0;
-  for(const k in h){const hd=h[k],p=S.prices[k]||0;unr+=(p-hd.avgCost)*hd.qty;}
+  for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||0;unr+=(p-hd.avgCost)*hd.qty;}
   const real=S.trades.filter(t=>t.type==='sell').reduce((s,t)=>s+(t.realizedPnl||0),0);
   const today=new Date().toISOString().split('T')[0];
   const snap={date:today,unrealized:Math.round(unr),realized:Math.round(real)};
@@ -630,13 +631,15 @@ function updateUpdated(){
   el('updatedText').textContent=new Date(S.lastUpdated).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
 }
 
+function priceKey(market,ticker){return market+'_'+ticker;}
+function holdingKey(market,ticker,broker){return market+'_'+ticker+'__'+(broker||'');}
 function computeHoldings(){
   const h={};
   const sorted=[...S.trades].sort((a,b)=>{const d=new Date(a.date)-new Date(b.date);if(d!==0)return d;return a.type==='buy'?-1:b.type==='buy'?1:0;});
   for(const t of sorted){
-    const k=t.market+'_'+t.ticker;
-    if(!h[k])h[k]={ticker:t.ticker,market:t.market,name:t.name||t.ticker,qty:0,totalCost:0,avgCost:0,realizedPnl:0,broker:t.memo||'',account:t.account||''};
-    if(t.memo&&!h[k].broker)h[k].broker=t.memo;
+    const broker=t.memo||'';
+    const k=holdingKey(t.market,t.ticker,broker);
+    if(!h[k])h[k]={ticker:t.ticker,market:t.market,name:t.name||t.ticker,qty:0,totalCost:0,avgCost:0,realizedPnl:0,broker:broker,account:t.account||'',priceKey:priceKey(t.market,t.ticker)};
     if(t.account&&!h[k].account)h[k].account=t.account;
     const hd=h[k];
     if(t.type==='buy'){hd.totalCost+=t.qty*t.price+(t.fee||0);hd.qty+=t.qty;hd.avgCost=hd.qty>0?hd.totalCost/hd.qty:0;}
@@ -658,7 +661,7 @@ function renderAll(){renderSummary();renderHoldings();renderTrades();renderDivid
 function renderSummary(){
   const h=computeHoldings();
   let tC=0,tV=0,tR=0;
-  for(const k in h){const hd=h[k],p=S.prices[k]||hd.avgCost;tC+=hd.avgCost*hd.qty;tV+=p*hd.qty;tR+=hd.realizedPnl;}
+  for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||hd.avgCost;tC+=hd.avgCost*hd.qty;tV+=p*hd.qty;tR+=hd.realizedPnl;}
   const unr=tV-tC,unrP=tC>0?(unr/tC)*100:0;
   // 税引後計算（新NISAは非課税、特定・一般は20.315%）
   let tR_after=0;
@@ -670,8 +673,8 @@ function renderSummary(){
   }
   const tDiv=S.dividends.reduce((s,d)=>{
     // 配当の口座種別はtickerから銘柄のaccountを参照
-    const k=d.market+'_'+d.ticker;
-    const hd=h[k];
+    const pk=d.market+'_'+d.ticker;
+    const hd=Object.values(h).find(x=>x.priceKey===pk);
     const rate=taxRate(hd?.account||'tokutei');
     return s+d.amount*(1-rate);
   },0);
@@ -716,14 +719,14 @@ function renderHoldings(){
 
   // 配当合計（銘柄別）
   const divByTicker={};
-  for(const d of S.dividends){const k=d.market+'_'+d.ticker;divByTicker[k]=(divByTicker[k]||0)+d.amount;}
+  for(const d of S.dividends){const pk=d.market+'_'+d.ticker;divByTicker[pk]=(divByTicker[pk]||0)+d.amount;}
 
   container.innerHTML=keys.map(k=>{
-    const hd=h[k],p=S.prices[k]||null;
+    const hd=h[k],p=S.prices[hd.priceKey]||null;
     const cost=hd.avgCost*hd.qty,val=p?p*hd.qty:null;
     const unr=val?val-cost:null,unrP=cost>0&&unr!==null?(unr/cost)*100:null;
     const realized=hd.realizedPnl||0;
-    const dividend=divByTicker[k]||0;
+    const dividend=divByTicker[hd.priceKey]||0;
     const total=unr!==null?unr+realized+dividend:realized+dividend;
     // 現在利回り・取得利回り（1株配当がアラートに設定されてれば使う）
     const alertItem=S.alerts.find(a=>a.market===hd.market&&a.ticker===hd.ticker);
@@ -866,8 +869,8 @@ function renderDividends(){
   const total=S.dividends.reduce((s,d)=>s+d.amount,0);
   const h=computeHoldings();
   const afterTax=S.dividends.reduce((s,d)=>{
-    const k=d.market+'_'+d.ticker;
-    const hd=h[k];
+    const pk=d.market+'_'+d.ticker;
+    const hd=Object.values(h).find(x=>x.priceKey===pk);
     const rate=taxRate(hd?.account||'tokutei');
     return s+d.amount*(1-rate);
   },0);
@@ -961,7 +964,7 @@ function renderPieChart() {
   const clrs=['#38bdf8','#4ade80','#fbbf24','#f87171','#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9','#2dd4bf'];
   charts['pie']=new Chart(el('pieChart'),{
     type:'doughnut',
-    data:{labels:keys.map(k=>h[k].ticker),datasets:[{data:keys.map(k=>(S.prices[k]||h[k].avgCost)*h[k].qty),backgroundColor:clrs,borderWidth:2,borderColor:'#ffffff'}]},
+    data:{labels:keys.map(k=>h[k].ticker),datasets:[{data:keys.map(k=>(S.prices[h[k].priceKey]||h[k].avgCost)*h[k].qty),backgroundColor:clrs,borderWidth:2,borderColor:'#ffffff'}]},
     options:{...cOpts,cutout:'65%'}
   });
 }
@@ -1010,7 +1013,7 @@ function renderSectorPie() {
   const sectorMap = {};
   for (const k of keys) {
     const hd = h[k];
-    const price = S.prices[k] || hd.avgCost;
+    const price = S.prices[hd.priceKey] || hd.avgCost;
     const val = price * hd.qty;
     const sector = getSectorLabel(hd.ticker);
     sectorMap[sector] = (sectorMap[sector] || 0) + val;
@@ -1119,7 +1122,7 @@ function renderLineChart() {
 
 function renderStockSummary() {
   const h = computeHoldings();
-  const allKeys = [...new Set(S.trades.map(t => t.market+'_'+t.ticker))];
+  const allKeys = [...new Set(S.trades.map(t => priceKey(t.market,t.ticker)))];
   const container = el('stockSummaryGrid');
   if (!allKeys.length) {
     container.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>データがありません</div>';
@@ -1133,7 +1136,16 @@ function renderStockSummary() {
   }
 
   const rows = allKeys.map(k => {
-    const hd = h[k] || { ticker:k.split('_')[1], market:k.split('_')[0], name:k.split('_')[1], qty:0, avgCost:0, realizedPnl:0 };
+    // priceKey単位で全holdingを集約
+    const hdList=Object.values(h).filter(x=>x.priceKey===k);
+    const qty=hdList.reduce((s,x)=>s+x.qty,0);
+    const totalCost=hdList.reduce((s,x)=>s+x.avgCost*x.qty,0);
+    const avgCost=qty>0?totalCost/qty:0;
+    const realizedPnl=hdList.reduce((s,x)=>s+x.realizedPnl,0);
+    const firstName=hdList[0]?.name||k.split('_')[1];
+    const firstMarket=hdList[0]?.market||k.split('_')[0];
+    const firstTicker=hdList[0]?.ticker||k.split('_').slice(1).join('_');
+    const hd={ticker:firstTicker,market:firstMarket,name:firstName,qty,avgCost,realizedPnl};
     const price = S.prices[k] || null;
     const unrealized = hd.qty > 0 && price ? (price - hd.avgCost) * hd.qty : 0;
     const realized = hd.realizedPnl || 0;
@@ -1720,47 +1732,63 @@ function openAccountModal(k){
   openModal('accountModal');
 }
 function setAccount(acct){
-  S.trades.forEach(t=>{if(t.market+'_'+t.ticker===_accountTargetKey)t.account=acct;});
+  const saParts=_accountTargetKey.split('__');const saPk=saParts[0];const saBroker=saParts[1]||'';
+  S.trades.forEach(t=>{if(priceKey(t.market,t.ticker)===saPk&&(t.memo||'')===saBroker)t.account=acct;});
   save();closeModal('accountModal');renderHoldings();renderSummary();
 }
 function autoFillName(){
   var ticker=(el('t_ticker').value||'').trim();
   if(!ticker)return;
   var nameEl=el('t_name');
-  if(nameEl.value.trim())return; // 既に入力済みならスキップ
+  if(nameEl.value.trim())return;
   var market=(el('t_market')||{value:'JP'}).value;
   var syms=market==='JP'?[ticker+'.T',ticker+'.S',ticker+'.N',ticker+'.F']:[ticker];
+  var PROXIES=[
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?url=',
+    'https://api.codetabs.com/v1/proxy?quest='
+  ];
+  var HOSTS=['query1.finance.yahoo.com','query2.finance.yahoo.com'];
   nameEl.placeholder='取得中…';
   function trySym(i){
     if(i>=syms.length){nameEl.placeholder='銘柄名（任意）';return;}
-    var proxyUrl='https://api.allorigins.win/raw?url='+encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/'+syms[i]+'?interval=1d&range=1d');
-    fetch(proxyUrl).then(function(r){
-      if(!r.ok)throw new Error('ng');
-      return r.json();
-    }).then(function(d){
-      var result=d&&d.chart&&d.chart.result&&d.chart.result[0];
-      var meta=result&&result.meta;
-      var name=meta&&(meta.longName||meta.shortName||'');
-      if(name&&name.length>0){
-        nameEl.value=name;
-        nameEl.placeholder='銘柄名（任意）';
-      }else{
-        trySym(i+1);
-      }
-    }).catch(function(){trySym(i+1);});
+    var done=false;
+    var total=PROXIES.length*HOSTS.length;
+    var fails=0;
+    PROXIES.forEach(function(px){
+      HOSTS.forEach(function(host){
+        var yUrl='https://'+host+'/v8/finance/chart/'+syms[i]+'?interval=1d&range=1d';
+        var ctrl=new AbortController();
+        var tid=setTimeout(function(){ctrl.abort();},5000);
+        fetch(px+encodeURIComponent(yUrl),{signal:ctrl.signal}).then(function(r){
+          clearTimeout(tid);
+          if(!r.ok)throw new Error('ng');
+          return r.json();
+        }).then(function(d){
+          if(done)return;
+          var result=d&&d.chart&&d.chart.result&&d.chart.result[0];
+          var meta=result&&result.meta;
+          var name=meta&&(meta.longName||meta.shortName||'');
+          if(name&&name.length>0){done=true;nameEl.value=name;nameEl.placeholder='銘柄名（任意）';}
+          else{fails++;if(fails>=total&&!done)trySym(i+1);}
+        }).catch(function(){clearTimeout(tid);fails++;if(fails>=total&&!done)trySym(i+1);});
+      });
+    });
   }
   trySym(0);
 }
 function manualPrice(k){
-  var parts=k.split('_');
-  var market=parts[0];
-  var ticker=parts.slice(1).join('_');
-  var cur=S.prices[k]?String(S.prices[k]):'';
+  var parts=k.split('__');
+  var pk=parts[0]; // market_ticker部分（priceKey）
+  var pkParts=pk.split('_');
+  var market=pkParts[0];
+  var ticker=pkParts.slice(1).join('_');
+  var cur=S.prices[pk]?String(S.prices[pk]):'';
   var val=prompt(ticker+'の現在株価を入力してください（例: 5190）',cur);
   if(val===null)return;
   var p=parseFloat(val.replace(/,/g,''));
   if(isNaN(p)||p<=0){alert('正しい数値を入力してください');return;}
-  S.prices[k]=p;
+  S.prices[pk]=p;
   save();renderAll();
 }
 function resetAllData(){
