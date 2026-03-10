@@ -1644,19 +1644,6 @@ function renderStockSummary() {
     const rc = clr(realized);
     const unrPct = hd.qty > 0 && price && hd.avgCost > 0 ? ((price - hd.avgCost) / hd.avgCost * 100) : null;
 
-    // 前日比
-    const dod = isHolding ? getDodForTicker(r.k) : null;
-    const dodHtml = dod
-      ? `<div style="background:var(--surface);border-radius:8px;padding:8px 10px">
-          <div class="s-label" style="font-size:10px">前日比</div>
-          <div class="mono ${clr(dod.change)}" style="font-size:13px;font-weight:600">${dod.change>=0?'+':''}${dod.changePct.toFixed(2)}%</div>
-          <div style="font-size:10px;color:${dod.change>=0?'var(--green)':'var(--red)'}">${dod.change>=0?'+':''}¥${Math.round(Math.abs(dod.change)*(hd.qty||1)).toLocaleString()}</div>
-        </div>`
-      : `<div style="background:var(--surface);border-radius:8px;padding:8px 10px">
-          <div class="s-label" style="font-size:10px">前日比</div>
-          <div style="font-size:12px;color:var(--text3)">—</div>
-        </div>`;
-
     return `<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">
         <div style="min-width:0;flex:1">
@@ -1672,7 +1659,7 @@ function renderStockSummary() {
           <span class="mono ${tc}" style="font-size:15px;font-weight:700;white-space:nowrap">${(total>=0?'+':'-')+'¥'+Math.abs(Math.round(total)).toLocaleString()}</span>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr ${isHolding?'1fr':''};gap:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
         <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
           <div class="s-label" style="font-size:10px">含み損益</div>
           <div class="mono ${uc}" style="font-size:13px;font-weight:600">${isHolding?(unrealized>=0?'+':'-')+'¥'+Math.abs(Math.round(unrealized)).toLocaleString():'—'}</div>
@@ -1682,12 +1669,11 @@ function renderStockSummary() {
           <div class="s-label" style="font-size:10px">実現損益</div>
           <div class="mono ${rc}" style="font-size:13px;font-weight:600">${realized!==0?(realized>=0?'+':'-')+'¥'+Math.abs(Math.round(realized)).toLocaleString():'—'}</div>
         </div>
-        ${isHolding ? dodHtml : ''}
+        <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
+          <div class="s-label" style="font-size:10px">配当</div>
+          <div class="mono" style="font-size:13px;font-weight:600;color:var(--yellow)">${dividend>0?'¥'+Math.round(dividend).toLocaleString():'—'}</div>
+        </div>
       </div>
-      ${dividend>0?`<div style="margin-top:6px;background:var(--surface);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
-        <div class="s-label" style="font-size:10px">配当</div>
-        <div class="mono" style="font-size:13px;font-weight:600;color:var(--yellow)">¥${Math.round(dividend).toLocaleString()}</div>
-      </div>`:''}
     </div>`;
   }).join('');
 }
