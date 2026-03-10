@@ -256,6 +256,7 @@ tr:active td{background:rgba(56,189,248,.05);}
         </button>
       </div>
     </div>
+    <div id="holdingsBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div id="holdingsCards" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 
@@ -275,6 +276,7 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div style="margin-bottom:10px">
       <input type="text" id="tradesSearch" placeholder="🔍 コード・銘柄名で絞り込み" oninput="renderTrades()" style="width:100%;padding:9px 13px;font-size:14px;border:1px solid var(--border2);border-radius:10px;background:#f8faff;color:var(--text)">
     </div>
+    <div id="tradesBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div id="tradesBody"></div>
   </div>
 
@@ -814,6 +816,37 @@ const pct=v=>(v>=0?'+':'')+v.toFixed(2)+'%';
 const clr=v=>v>0?'up':v<0?'down':'neutral';
 const mkChip=(pos,label)=>`<span class="chip chip-${pos?'up':'down'}">${label}</span>`;
 
+let holdingsBrokerFilter = 'all';
+let tradesBrokerFilter = 'all';
+
+function getBrokers(items, key) {
+  const set = new Set();
+  items.forEach(t => { if (t[key]) set.add(t[key]); });
+  return [...set].sort();
+}
+
+function renderBrokerFilterBar(containerId, brokers, current, onSelect) {
+  const bar = el(containerId);
+  if (!bar) return;
+  if (brokers.length <= 1) { bar.innerHTML = ''; return; }
+  const all = ['all', ...brokers];
+  bar.innerHTML = all.map(b => {
+    const label = b === 'all' ? '全て' : b;
+    const active = current === b;
+    return `<button onclick="${onSelect}('${b}')" style="padding:4px 12px;font-size:11px;font-weight:600;border-radius:20px;border:1.5px solid ${active?'var(--accent)':'var(--border2)'};background:${active?'var(--accent)':'transparent'};color:${active?'#fff':'var(--text2)'};cursor:pointer;transition:all .15s">${label}</button>`;
+  }).join('');
+}
+
+function setHoldingsBrokerFilter(b) {
+  holdingsBrokerFilter = b;
+  renderHoldings();
+}
+
+function setTradesBrokerFilter(b) {
+  tradesBrokerFilter = b;
+  renderTrades();
+}
+
 function renderAll(){renderSummary();renderHoldings();renderTrades();renderDividends();renderIncomeSection();renderCharts();updateUpdated();}
 
 function renderSummary(){
@@ -861,8 +894,14 @@ function brokerBadge(broker){
 
 function renderHoldings(){
   const h=computeHoldings();
-  const keys=Object.keys(h).filter(k=>h[k].qty>0);
+  let keys=Object.keys(h).filter(k=>h[k].qty>0);
   const container=el('holdingsCards');
+
+  // 証券会社フィルターバー
+  const brokers = getBrokers(keys.map(k=>h[k]), 'broker');
+  renderBrokerFilterBar('holdingsBrokerFilter', brokers, holdingsBrokerFilter, 'setHoldingsBrokerFilter');
+  if (holdingsBrokerFilter !== 'all') keys = keys.filter(k => h[k].broker === holdingsBrokerFilter);
+
   if(!keys.length){
     container.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>銘柄がありません<br><small>+ から取引を入力してください</small></div>`;
     return;
@@ -994,8 +1033,13 @@ function prefillTradeSell(ticker,market,name){
 
 
 function renderTrades(){
+  // 証券会社フィルターバー
+  const brokers = getBrokers(S.trades, 'memo');
+  renderBrokerFilterBar('tradesBrokerFilter', brokers, tradesBrokerFilter, 'setTradesBrokerFilter');
+
   var _sq=el('tradesSearch');var q=_sq?_sq.value.trim().toLowerCase():'';
   var all=[...S.trades].sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  if (tradesBrokerFilter !== 'all') all = all.filter(t => t.memo === tradesBrokerFilter);
   var sorted=q?all.filter(function(t){return (t.ticker||'').toLowerCase().indexOf(q)>=0||(t.name||'').toLowerCase().indexOf(q)>=0;}):all;
   const tbody=el('tradesBody');
   if(!sorted.length){tbody.innerHTML='<div class="empty"><div class="empty-icon">📋</div>'+(q?'該当なし':'取引がありません')+'</div>';return;}
