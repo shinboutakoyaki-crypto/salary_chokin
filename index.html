@@ -1159,43 +1159,72 @@ function renderLineChart() {
       ctx.fillText('「更新」を押すとデータが蓄積されます', canvas.width/2, canvas.height/2);
       return;
     }
-    const gradBlue = ctx.createLinearGradient(0,0,0,210);
-    gradBlue.addColorStop(0,'rgba(29,111,232,.3)'); gradBlue.addColorStop(1,'rgba(29,111,232,.0)');
-    const gradGreen = ctx.createLinearGradient(0,0,0,210);
-    gradGreen.addColorStop(0,'rgba(22,163,74,.25)'); gradGreen.addColorStop(1,'rgba(22,163,74,.0)');
+
+    // 評価額合計（取得額＋含み損益）を日次データとして計算
+    const h = computeHoldings();
+    const totalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
+    const assetData = hist.map(p => totalCost + (p.unrealized||0));
+
+    // Y軸をデータに合わせてタイトに（±5%）
+    const minVal = Math.min(...assetData);
+    const maxVal = Math.max(...assetData);
+    const pad = (maxVal - minVal) * 0.08 || maxVal * 0.02;
+    const yMin = Math.floor((minVal - pad) / 10000) * 10000;
+    const yMax = Math.ceil((maxVal + pad) / 10000) * 10000;
+
+    // X軸ラベル：日次データなので "MM/DD" 形式
+    const xLabels = hist.map(p => {
+      const [,m,d] = p.date.split('-');
+      return `${parseInt(m)}/${parseInt(d)}`;
+    });
+
+    // 赤単色グラデーション
+    const gradRed = ctx.createLinearGradient(0, 0, 0, 220);
+    gradRed.addColorStop(0, 'rgba(220,38,38,.18)');
+    gradRed.addColorStop(1, 'rgba(220,38,38,.0)');
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
       data: {
-        labels: hist.map(p => p.date.slice(5)),
-        datasets: [
-          {
-            label: '含み損益',
-            data: hist.map(p => p.unrealized),
-            borderColor: '#1d6fe8',
-            backgroundColor: gradBlue,
-            fill: true, tension: .4,
-            pointRadius: hist.length <= 10 ? 5 : hist.length <= 30 ? 3 : 2,
-            pointBackgroundColor: '#1d6fe8',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2,
-            borderWidth: 2.5
-          },
-          {
-            label: '実現損益',
-            data: hist.map(p => p.realized),
-            borderColor: '#16a34a',
-            backgroundColor: gradGreen,
-            fill: true, tension: .4,
-            pointRadius: hist.length <= 10 ? 5 : hist.length <= 30 ? 3 : 2,
-            pointBackgroundColor: '#16a34a',
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2,
-            borderWidth: 2.5
-          }
-        ]
+        labels: xLabels,
+        datasets: [{
+          label: '評価額',
+          data: assetData,
+          borderColor: '#dc2626',
+          backgroundColor: gradRed,
+          fill: true,
+          tension: 0,         // シャープ（直線）
+          pointRadius: 0,     // ドットなし
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#dc2626',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          borderWidth: 2
+        }]
       },
-      options: { ...cOpts, scales: commonScaleOpts }
+      options: {
+        ...cOpts,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx2 => '¥' + Math.round(ctx2.raw).toLocaleString()
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit:6, font:{size:11} },
+            grid: { display:false }
+          },
+          y: {
+            min: yMin,
+            max: yMax,
+            ticks: { color:'#94a3b8', callback: v => fmtMan2(v)+'円', font:{size:11}, maxTicksLimit:4 },
+            grid: { color:'rgba(148,163,184,.12)' }
+          }
+        }
+      }
     });
 
   } else {
@@ -1280,6 +1309,8 @@ function renderLineChart() {
     gradPnl.addColorStop(0,'rgba(220,38,38,.2)');
     gradPnl.addColorStop(1,'rgba(220,38,38,.0)');
 
+    const baseRadius = data.length <= 12 ? 5 : data.length <= 24 ? 3 : 2;
+
     charts['line'] = new Chart(canvas, {
       type: 'line',
       data: {
@@ -1290,8 +1321,8 @@ function renderLineChart() {
           borderColor: '#dc2626',
           backgroundColor: gradPnl,
           fill: true, tension: .3,
-          pointRadius: data.length <= 12 ? 5 : data.length <= 24 ? 3 : 2,
-          pointBackgroundColor: '#dc2626',
+          pointRadius: data.map(()=>baseRadius),
+          pointBackgroundColor: data.map(()=>'#dc2626'),
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
           borderWidth: 2.5
@@ -1307,9 +1338,42 @@ function renderLineChart() {
           const ym = ymList[idx];
           if (sel) sel.value = ym;
           updatePnlVal();
+          highlightPnlPoint(idx);
         }
       }
     });
+
+    function highlightPnlPoint(selectedIdx) {
+      const chart = charts['line'];
+      if (!chart) return;
+      const ds = chart.data.datasets[0];
+      ds.pointRadius = data.map((_, i) => i === selectedIdx ? baseRadius * 3 : baseRadius);
+      ds.pointBackgroundColor = data.map((_, i) => i === selectedIdx ? '#f59e0b' : '#dc2626');
+      ds.pointBorderColor = data.map((_, i) => i === selectedIdx ? '#fff' : '#fff');
+      ds.pointBorderWidth = data.map((_, i) => i === selectedIdx ? 3 : 2);
+      chart.update('none');
+    }
+
+    // プルダウン変更時もハイライト
+    const origOnPnlMonthChange = updatePnlVal;
+    window.onPnlMonthChange = function() {
+      origOnPnlMonthChange();
+      const v = sel ? sel.value : '__all__';
+      if (v === '__all__') {
+        // 全点をリセット
+        const chart = charts['line'];
+        if (chart) {
+          const ds = chart.data.datasets[0];
+          ds.pointRadius = data.map(()=>baseRadius);
+          ds.pointBackgroundColor = data.map(()=>'#dc2626');
+          ds.pointBorderWidth = data.map(()=>2);
+          chart.update('none');
+        }
+      } else {
+        const idx = ymList.indexOf(v);
+        if (idx >= 0) highlightPnlPoint(idx);
+      }
+    };
   }
 }
 function setDivYear(y){
