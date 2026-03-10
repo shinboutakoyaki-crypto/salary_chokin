@@ -1070,11 +1070,9 @@ function renderLineChart() {
       labels.push(t.date.slice(5));
       data.push(Math.round(cum));
     }
-    const isPositive = cum >= 0;
-    const lineColor = isPositive ? '#16a34a' : '#dc2626';
     const gradPnl = ctx.createLinearGradient(0,0,0,210);
-    gradPnl.addColorStop(0, isPositive?'rgba(22,163,74,.25)':'rgba(220,38,38,.2)');
-    gradPnl.addColorStop(1, isPositive?'rgba(22,163,74,.0)':'rgba(220,38,38,.0)');
+    gradPnl.addColorStop(0,'rgba(220,38,38,.2)');
+    gradPnl.addColorStop(1,'rgba(220,38,38,.0)');
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1083,14 +1081,15 @@ function renderLineChart() {
         datasets: [{
           label: '累計実現損益',
           data,
-          borderColor: lineColor,
+          borderColor: '#dc2626',
           backgroundColor: gradPnl,
           fill: true, tension: .4,
           pointRadius: data.length <= 10 ? 5 : data.length <= 30 ? 3 : 2,
-          pointBackgroundColor: lineColor,
+          pointBackgroundColor: '#dc2626',
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
-          borderWidth: 2.5
+          borderWidth: 2.5,
+          borderDash: []
         }]
       },
       options: { ...cOpts, scales: commonScaleOpts }
