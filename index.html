@@ -6,7 +6,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#1d6fe8">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <title>サラリーマンの貯金箱</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -772,21 +774,14 @@ function renderSummary(){
     const pnl=hd.realizedPnl||0;
     tR_after+=pnl>0?pnl*(1-rate):pnl;
   }
-  const tDiv=S.dividends.reduce((s,d)=>{
-    // 配当の口座種別はtickerから銘柄のaccountを参照
-    const pk=d.market+'_'+d.ticker;
-    const hd=Object.values(h).find(x=>x.priceKey===pk);
-    const rate=taxRate(hd?.account||'tokutei');
-    return s+d.amount*(1-rate);
-  },0);
-  const tDivRaw=S.dividends.reduce((s,d)=>s+d.amount,0);
-  const tRwithDiv = tR_after + tDiv; // 税引後実現損益＋税引後配当
+  const tDiv=S.dividends.reduce((s,d)=>s+d.amount,0); // 入力値はすでに税引後
+  const tRwithDiv = tR_after + tDiv;
   const tot=unr+tR+tDiv;
   el('summaryGrid').innerHTML=`
     <div class="summary-card wide"><div class="s-label">評価額合計</div><div class="s-value accent-c">${fmtJP(tV)}</div><div class="s-sub">取得額 ${fmtJP(tC)}</div></div>
     <div class="summary-card"><div class="s-label">含み損益</div><div class="s-value sm ${clr(unr)}">${sign(unr)}${fmtJP(unr)}</div><div class="s-sub">${pct(unrP)}</div></div>
     <div class="summary-card"><div class="s-label">実現損益＋配当<small style="font-size:9px;color:var(--text3)">（税引後）</small></div><div class="s-value sm ${clr(tRwithDiv)}">${sign(tRwithDiv)}${fmtJP(tRwithDiv)}</div><div class="s-sub">売却益＋受取配当</div></div>
-    <div class="summary-card"><div class="s-label">累計配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(tDiv)}</div><div class="s-sub">税引前</div></div>
+    <div class="summary-card"><div class="s-label">累計配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(tDiv)}</div><div class="s-sub">税引後合計</div></div>
     <div class="summary-card"><div class="s-label">総合損益</div><div class="s-value sm ${clr(tot)}">${sign(tot)}${fmtJP(tot)}</div><div class="s-sub">含み+実現+配当</div></div>
   `;
 }
@@ -1011,17 +1006,9 @@ function renderIncomeSection(){
 function renderDividends(){
   const sorted=[...S.dividends].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const total=S.dividends.reduce((s,d)=>s+d.amount,0);
-  const h=computeHoldings();
-  const afterTax=S.dividends.reduce((s,d)=>{
-    const pk=d.market+'_'+d.ticker;
-    const hd=Object.values(h).find(x=>x.priceKey===pk);
-    const rate=taxRate(hd?.account||'tokutei');
-    return s+d.amount*(1-rate);
-  },0);
   const thisYear=S.dividends.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
-    <div class="summary-card"><div class="s-label">累計配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(total)}</div><div class="s-sub">税引前</div></div>
-    <div class="summary-card"><div class="s-label">税引後累計</div><div class="s-value sm up">${fmtJP(afterTax)}</div><div class="s-sub">口座種別に応じた課税後</div></div>
+    <div class="summary-card"><div class="s-label">累計受取配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(total)}</div><div class="s-sub">税引後合計</div></div>
     <div class="summary-card wide"><div class="s-label">今年の配当</div><div class="s-value sm accent-c">${fmtJP(thisYear)}</div><div class="s-sub">${new Date().getFullYear()}年合計</div></div>
   `;
   const tbody=el('dividendsBody');
@@ -1679,10 +1666,9 @@ function addDividend(){
   const name=v('d_name').trim(),amount=parseFloat(v('d_amount'));
   const account=v('d_account')||'tokutei';
   const market=el('d_market')?v('d_market'):'JP';
-  // 口座で税率自動設定
-  const tax = account==='nisa' ? 0 : 20.315;
   if(!date||!ticker||!amount){alert('必須項目（*）を入力してください');return;}
-  S.dividends.push({date,market,ticker,name,amount,tax,account,dps:null,qty:null});
+  // 入力金額は税引後なのでtax=0で保存（二重控除防止）
+  S.dividends.push({date,market,ticker,name,amount,tax:0,account,dps:null,qty:null});
   save();closeModal('dividendModal');renderAll();
 }
 
