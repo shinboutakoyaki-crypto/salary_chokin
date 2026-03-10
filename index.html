@@ -1015,10 +1015,7 @@ function renderDividends(){
   if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">💴</div>配当データがありません</div>`;return;}
   tbody.innerHTML=sorted.map(d=>{
     const idx=S.dividends.indexOf(d);
-    const _hdiv=computeHoldings()[d.market+'_'+d.ticker];
-    const _ratediv=_hdiv?taxRate(_hdiv.account||'tokutei'):(d.tax||20.315)/100;
-    const at=d.amount*(1-_ratediv);
-    return `<div class="trade-card"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span><button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:12px">${fmtJP(d.amount)}</span><span style="font-size:11px;color:var(--text3)">→</span><span class="mono" style="font-size:12px">${fmtJP(at)}</span></div></div>`;
+    return `<div class="trade-card"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span><button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:13px;font-weight:700">${fmtJP(d.amount)}</span></div></div>`;
   }).join('');
 }
 
@@ -1982,14 +1979,15 @@ function parseCsvDivFile(file) {
         const taxRaw = row[9].replace(/[""]/g,'').trim();    // 税額
         const netRaw = row[10] ? row[10].replace(/[""]/g,'').trim() : '';  // 受取金額
 
-        const amount = cleanNum(totalRaw);  // 税引前を受取金額として記録
+        const grossAmount = cleanNum(totalRaw);  // 税引前
         const taxAmount = cleanNum(taxRaw);
-        const net = cleanNum(netRaw) || (amount - taxAmount);
+        const net = cleanNum(netRaw) || (grossAmount - taxAmount); // 税引後
+        const amount = net; // 保存するのは税引後金額
         const dps = dpsRaw === '-' ? null : cleanNum(dpsRaw) || null;
         const qty = cleanNum(qtyRaw) || null;
 
-        // 税率計算
-        const taxRate = amount > 0 ? (taxAmount / amount) * 100 : 20.315;
+        // 税率（参考値として保持、計算には使わない）
+        const taxRate = grossAmount > 0 ? (taxAmount / grossAmount) * 100 : 20.315;
 
         // 市場判定: 米国株・投資信託（USD）は US、それ以外はJP
         const isUS = currency === 'USD' || currency.includes('ドル') || productType.includes('外国');
