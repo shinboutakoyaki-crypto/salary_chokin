@@ -194,6 +194,11 @@ tr:active td{background:rgba(56,189,248,.05);}
           <button id="assetToggle_pnl" class="btn btn-sm btn-ghost" onclick="setAssetMode('pnl')" style="padding:4px 10px;font-size:11px">実損益</button>
         </div>
       </div>
+      <div style="padding:8px 16px 0;display:flex;gap:6px" id="linePeriodBtns">
+        <button class="btn btn-sm btn-primary" id="linePeriod_1m" onclick="setLinePeriod('1m')" style="padding:3px 10px;font-size:11px">1ヶ月</button>
+        <button class="btn btn-sm btn-ghost" id="linePeriod_3m" onclick="setLinePeriod('3m')" style="padding:3px 10px;font-size:11px">3ヶ月</button>
+        <button class="btn btn-sm btn-ghost" id="linePeriod_all" onclick="setLinePeriod('all')" style="padding:3px 10px;font-size:11px">全期間</button>
+      </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
     </div>
     <div class="card">
@@ -940,15 +945,158 @@ let assetMode='asset'; // 'asset' or 'pnl'
 let divMode='monthly'; // 'monthly' or 'cumulative'
 let divYear=new Date().getFullYear();
 
+let linePeriod = '1m';
+
+function setLinePeriod(p) {
+  linePeriod = p;
+  ['1m','3m','all'].forEach(k => {
+    const b = el('linePeriod_'+k);
+    if (b) { b.className = 'btn btn-sm ' + (k===p?'btn-primary':'btn-ghost'); b.style.cssText='padding:3px 10px;font-size:11px'; }
+  });
+  renderLineChart();
+}
+
 function setAssetMode(mode) {
   assetMode = mode;
   el('assetToggle_asset').className = 'btn btn-sm ' + (mode==='asset'?'btn-primary':'btn-ghost');
   el('assetToggle_pnl').className = 'btn btn-sm ' + (mode==='pnl'?'btn-primary':'btn-ghost');
   el('assetToggle_asset').style.padding='4px 10px'; el('assetToggle_asset').style.fontSize='11px';
   el('assetToggle_pnl').style.padding='4px 10px'; el('assetToggle_pnl').style.fontSize='11px';
+  // 期間ボタン：実損益は全期間固定なので非表示
+  const pb = el('linePeriodBtns');
+  if (pb) pb.style.display = mode==='asset' ? '' : 'none';
   renderLineChart();
 }
 
+function filterByPeriod(arr, dateKey) {
+  if (linePeriod === 'all') return arr;
+  const now = new Date();
+  const days = linePeriod === '1m' ? 30 : 90;
+  const cutoff = new Date(now - days * 86400000);
+  return arr.filter(d => new Date(d[dateKey]) >= cutoff);
+}
+
+function makeGradient(ctx, color) {
+  const grad = ctx.createLinearGradient(0, 0, 0, 200);
+  grad.addColorStop(0, color.replace(')', ',.25)').replace('rgb','rgba'));
+  grad.addColorStop(1, color.replace(')', ',.01)').replace('rgb','rgba'));
+  return grad;
+}
+
+function fmtMan2(v) {
+  const abs = Math.abs(v);
+  if (abs >= 10000000) return (v/10000000).toFixed(1)+'千万';
+  if (abs >= 1000000) return (v/10000).toFixed(0)+'万';
+  if (abs >= 10000) return (v/10000).toFixed(1)+'万';
+  return v.toLocaleString();
+}
+
+function renderLineChart() {
+  killChart('line');
+  const canvas = el('lineChart');
+  const ctx = canvas.getContext('2d');
+
+  const commonScaleOpts = {
+    x: {
+      ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit:6, font:{size:11} },
+      grid: { display:false }
+    },
+    y: {
+      ticks: { color:'#94a3b8', callback: v => fmtMan2(v), font:{size:11} },
+      grid: { color:'rgba(148,163,184,.12)' }
+    }
+  };
+
+  if (assetMode === 'asset') {
+    const hist = filterByPeriod(S.pnlHistory, 'date');
+    if (!hist.length) {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '13px Outfit';
+      ctx.textAlign = 'center';
+      ctx.fillText('「更新」を押すとデータが蓄積されます', canvas.width/2, canvas.height/2);
+      return;
+    }
+    const gradBlue = ctx.createLinearGradient(0,0,0,210);
+    gradBlue.addColorStop(0,'rgba(29,111,232,.3)'); gradBlue.addColorStop(1,'rgba(29,111,232,.0)');
+    const gradGreen = ctx.createLinearGradient(0,0,0,210);
+    gradGreen.addColorStop(0,'rgba(22,163,74,.25)'); gradGreen.addColorStop(1,'rgba(22,163,74,.0)');
+
+    charts['line'] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: hist.map(p => p.date.slice(5)),
+        datasets: [
+          {
+            label: '含み損益',
+            data: hist.map(p => p.unrealized),
+            borderColor: '#1d6fe8',
+            backgroundColor: gradBlue,
+            fill: true, tension: .4,
+            pointRadius: hist.length <= 10 ? 5 : hist.length <= 30 ? 3 : 2,
+            pointBackgroundColor: '#1d6fe8',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            borderWidth: 2.5
+          },
+          {
+            label: '実現損益',
+            data: hist.map(p => p.realized),
+            borderColor: '#16a34a',
+            backgroundColor: gradGreen,
+            fill: true, tension: .4,
+            pointRadius: hist.length <= 10 ? 5 : hist.length <= 30 ? 3 : 2,
+            pointBackgroundColor: '#16a34a',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            borderWidth: 2.5
+          }
+        ]
+      },
+      options: { ...cOpts, scales: commonScaleOpts }
+    });
+
+  } else {
+    const trades = [...S.trades].filter(t => t.type==='sell').sort((a,b) => new Date(a.date)-new Date(b.date));
+    if (!trades.length) {
+      ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
+      ctx.fillText('売却履歴がありません', canvas.width/2, canvas.height/2);
+      return;
+    }
+    let cum = 0;
+    const labels = [], data = [];
+    for (const t of trades) {
+      cum += t.realizedPnl || 0;
+      labels.push(t.date.slice(5));
+      data.push(Math.round(cum));
+    }
+    const isPositive = cum >= 0;
+    const lineColor = isPositive ? '#16a34a' : '#dc2626';
+    const gradPnl = ctx.createLinearGradient(0,0,0,210);
+    gradPnl.addColorStop(0, isPositive?'rgba(22,163,74,.25)':'rgba(220,38,38,.2)');
+    gradPnl.addColorStop(1, isPositive?'rgba(22,163,74,.0)':'rgba(220,38,38,.0)');
+
+    charts['line'] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '累計実現損益',
+          data,
+          borderColor: lineColor,
+          backgroundColor: gradPnl,
+          fill: true, tension: .4,
+          pointRadius: data.length <= 10 ? 5 : data.length <= 30 ? 3 : 2,
+          pointBackgroundColor: lineColor,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          borderWidth: 2.5
+        }]
+      },
+      options: { ...cOpts, scales: commonScaleOpts }
+    });
+  }
+}
 function setDivYear(y){
   divYear=y;
   updateDivYearBtns();
@@ -1078,71 +1226,6 @@ function renderTodayTrades() {
       </div>`;
     }).join('')}
   `;
-}
-
-function renderLineChart() {
-  killChart('line');
-  const h = computeHoldings();
-
-  if (assetMode === 'asset') {
-    // 総資産推移: pnlHistoryに評価額を記録
-    // snapPnlで保存された履歴 + 今日の計算値
-    const hist = S.pnlHistory.slice(-90);
-    if (hist.length < 1) {
-      // データなしメッセージ
-      const ctx = el('lineChart').getContext('2d');
-      ctx.fillStyle = '#334155';
-      ctx.font = '14px Outfit';
-      ctx.textAlign = 'center';
-      ctx.fillText('「更新」を押すとデータが蓄積されます', el('lineChart').width/2, el('lineChart').height/2);
-      return;
-    }
-    // 取得額（コスト）を計算
-    const totalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty, 0);
-    charts['line']=new Chart(el('lineChart'),{
-      type:'line',
-      data:{
-        labels:hist.map(p=>p.date.slice(5)),
-        datasets:[
-          {label:'含み損益',data:hist.map(p=>p.unrealized),borderColor:'#1d6fe8',backgroundColor:'rgba(29,111,232,.1)',fill:true,tension:.4,pointRadius:2,borderWidth:2},
-          {label:'実現損益',data:hist.map(p=>p.realized),borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.08)',fill:true,tension:.4,pointRadius:2,borderWidth:2},
-        ]
-      },
-      options:{...cOpts,
-        scales:{
-          x:{ticks:{color:'#64748b',maxRotation:0,maxTicksLimit:8}},
-          y:{ticks:{color:'#64748b',callback:v=>'¥'+Math.round(v).toLocaleString()},grid:{color:'rgba(29,111,232,.08)'}}
-        }
-      }
-    });
-  } else {
-    // 実損益モード: 銘柄別実現損益の積み上げ
-    const trades = [...S.trades].filter(t=>t.type==='sell').sort((a,b)=>new Date(a.date)-new Date(b.date));
-    if (!trades.length) return;
-    let cum = 0;
-    const labels = [], data = [];
-    for (const t of trades) {
-      cum += t.realizedPnl || 0;
-      labels.push(t.date.slice(5));
-      data.push(Math.round(cum));
-    }
-    charts['line']=new Chart(el('lineChart'),{
-      type:'line',
-      data:{labels,datasets:[{
-        label:'累計実現損益',
-        data,
-        borderColor: cum>=0?'#16a34a':'#dc2626',
-        backgroundColor: cum>=0?'rgba(22,163,74,.08)':'rgba(220,38,38,.08)',
-        fill:true,tension:.4,pointRadius:2,borderWidth:2
-      }]},
-      options:{...cOpts,
-        scales:{
-          x:{ticks:{color:'#64748b',maxRotation:0,maxTicksLimit:8}},
-          y:{ticks:{color:'#64748b',callback:v=>'¥'+Math.round(v).toLocaleString()},grid:{color:'rgba(29,111,232,.08)'}}
-        }
-      }
-    });
-  }
 }
 
 function renderStockSummary() {
