@@ -621,7 +621,7 @@ function refreshPrices(){
       setTimeout(function(){processChunk(next.concat(retry));},200);
     });
   }
-  processChunk(keys);
+  processChunk(priceKeys);
 }
 
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
@@ -642,6 +642,7 @@ function snapPnl(){
 
 function updateUpdated(){
   if(!S.lastUpdated)return;
+  el('updatedText').style.display='';
   el('updatedText').textContent=new Date(S.lastUpdated).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
 }
 
