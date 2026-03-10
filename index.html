@@ -317,7 +317,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="modal-overlay" id="tradeModal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">取引入力</div><button class="modal-close" onclick="closeModal('tradeModal')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="tradeModalTitle">取引入力</div><button class="modal-close" onclick="closeModal('tradeModal');_editTradeIdx=-1;el('tradeModalTitle').textContent='取引入力';el('tradeSaveBtn').textContent='💾 保存'">✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group"><label class="form-label">日付 *</label><input type="date" id="t_date" class="form-input"></div>
@@ -348,7 +348,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
       <div class="form-actions">
         <button class="btn btn-ghost" onclick="closeModal('tradeModal')">キャンセル</button>
-        <button class="btn btn-primary" onclick="addTrade()">💾 保存</button>
+        <button class="btn btn-primary" id="tradeSaveBtn" onclick="addTrade()">💾 保存</button>
       </div>
     </div>
   </div>
@@ -867,7 +867,8 @@ function renderTrades(){
         <span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(t.name||'').slice(0,10)+(t.name&&t.name.length>10?'…':'')}</span>
         ${brokerBadge(t.memo)}
         ${accountBadge(t.account)}
-        <button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delTrade(${idx})">🗑</button>
+        <button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="editTrade(${idx})">✏️</button>
+        <button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px" onclick="delTrade(${idx})">🗑</button>
       </div>
       <div class="trade-card-bot">
         <span style="color:var(--text3);font-size:11px">${t.date}</span>
@@ -1444,14 +1445,48 @@ function selectBroker(broker){
   else if(broker==='SBI証券')el('broker_sbi').style.background='rgba(33,150,243,.25)';
   else el('broker_other').style.background='rgba(148,163,184,.15)';
 }
+let _editTradeIdx = -1; // -1=新規, 0以上=編集中のindex
+
+function editTrade(idx) {
+  const t = S.trades[idx];
+  if (!t) return;
+  _editTradeIdx = idx;
+  // フォームにデータ流し込み
+  el('t_date').value = t.date;
+  el('t_market').value = t.market;
+  el('t_ticker').value = t.ticker;
+  el('t_name').value = t.name || '';
+  el('t_type').value = t.type;
+  el('t_qty').value = t.qty;
+  el('t_price').value = t.price;
+  el('t_fee').value = t.fee || 0;
+  el('t_memo').value = '';
+  selectBroker(t.memo || '');
+  selectAccount(t.account || '');
+  // タイトルとボタンを編集モードに
+  el('tradeModalTitle').textContent = '取引を編集';
+  el('tradeSaveBtn').textContent = '💾 更新';
+  openModal('tradeModal');
+}
+
 function addTrade(){
   const date=v('t_date'),market=v('t_market'),ticker=v('t_ticker').toUpperCase().trim();
   const name=v('t_name').trim(),type=v('t_type');
   const qty=parseFloat(v('t_qty')),price=parseFloat(v('t_price')),fee=parseFloat(v('t_fee'))||0,memo=v('t_memo').trim();
   if(!date||!ticker||!qty||!price){alert('必須項目（*）を入力してください');return;}
-  S.trades.push({date,market,ticker,name,type,qty,price,fee,memo:_selectedBroker||memo,account:_selectedAccount});
+  const tradeData = {date,market,ticker,name,type,qty,price,fee,memo:_selectedBroker||memo,account:_selectedAccount};
+  if (_editTradeIdx >= 0) {
+    // 編集モード：既存データを上書き（realizedPnlは再計算のため引き継ぐ）
+    const old = S.trades[_editTradeIdx];
+    S.trades[_editTradeIdx] = {...old, ...tradeData};
+  } else {
+    S.trades.push(tradeData);
+  }
   S.trades.sort((a,b)=>new Date(a.date)-new Date(b.date));
   save();closeModal('tradeModal');
+  _editTradeIdx = -1;
+  el('tradeModalTitle').textContent = '取引入力';
+  el('tradeSaveBtn').textContent = '💾 保存';
   ['t_ticker','t_name','t_qty','t_price','t_memo'].forEach(id=>el(id).value='');
   el('t_fee').value='0';
   selectBroker('');selectAccount('');
