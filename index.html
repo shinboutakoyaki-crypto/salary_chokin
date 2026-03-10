@@ -769,6 +769,18 @@ function snapPnl(){
   const i=S.pnlHistory.findIndex(p=>p.date===today);
   if(i>=0)S.pnlHistory[i]=snap;else S.pnlHistory.push(snap);
   S.pnlHistory.sort((a,b)=>a.date.localeCompare(b.date));
+
+  // 銘柄別株価を記録
+  if(!S.priceHistory) S.priceHistory={};
+  for(const pk in S.prices){
+    if(!S.priceHistory[pk]) S.priceHistory[pk]=[];
+    const arr=S.priceHistory[pk];
+    const idx=arr.findIndex(x=>x.date===today);
+    if(idx>=0) arr[idx].price=S.prices[pk];
+    else arr.push({date:today,price:S.prices[pk]});
+    // 最大90日分だけ保持
+    if(arr.length>90) arr.splice(0,arr.length-90);
+  }
 }
 
 function updateUpdated(){
@@ -1446,6 +1458,19 @@ function setPieMode(mode) {
   else renderTodayTrades();
 }
 
+// 銘柄の前日比を返す {change, changePct} or null
+function getDodForTicker(priceKey) {
+  if (!S.priceHistory || !S.priceHistory[priceKey]) return null;
+  const arr = [...S.priceHistory[priceKey]].sort((a,b)=>a.date.localeCompare(b.date));
+  const todayStr = today();
+  const todayIdx = arr.findIndex(x=>x.date===todayStr);
+  if (todayIdx < 1) return null;
+  const prev = arr[todayIdx-1].price;
+  const cur  = arr[todayIdx].price;
+  if (!prev || !cur) return null;
+  return { change: cur - prev, changePct: ((cur - prev) / prev) * 100 };
+}
+
 function renderPnlRanking() {
   const h = computeHoldings();
   const keys = Object.keys(h).filter(k => h[k].qty > 0);
@@ -1454,43 +1479,94 @@ function renderPnlRanking() {
     view.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>保有銘柄がありません</div>';
     return;
   }
-  const ranked = keys.map(k => {
-    const hd = h[k];
-    const price = S.prices[hd.priceKey] || hd.avgCost;
-    const pct = hd.avgCost > 0 ? ((price - hd.avgCost) / hd.avgCost) * 100 : 0;
-    const pnl = (price - hd.avgCost) * hd.qty;
-    return { ticker: hd.ticker, name: hd.name||'', market: hd.market, pct, pnl };
-  }).sort((a,b) => b.pct - a.pct).slice(0, 5);
 
-  const maxAbs = Math.max(...ranked.map(r => Math.abs(r.pct)), 0.01);
-  const medals = ['🥇','🥈','🥉'];
+  // 前日比データがあるか確認
+  const hasDod = keys.some(k => getDodForTicker(h[k].priceKey) !== null);
 
-  view.innerHTML = `
-    <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase">取得単価比 損益率ランキング</div>
-    ${ranked.map((r, i) => {
-      const isUp = r.pct >= 0;
-      const bar = Math.min(Math.abs(r.pct) / maxAbs * 100, 100);
-      const color = isUp ? 'var(--green)' : 'var(--red)';
-      return `<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-        <div style="font-size:15px;min-width:22px;text-align:center">${medals[i] || (i+1)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-            <div>
-              <span class="ticker ${r.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px">${r.ticker}</span>
-              <span style="font-size:11px;color:var(--text3);margin-left:4px">${r.name}</span>
+  if (hasDod) {
+    // 前日比騰落率ランキング
+    const ranked = keys.map(k => {
+      const hd = h[k];
+      const dod = getDodForTicker(hd.priceKey);
+      const price = S.prices[hd.priceKey] || hd.avgCost;
+      const changePct = dod ? dod.changePct : 0;
+      const changeAmt = dod ? dod.change * hd.qty : 0;
+      return { ticker: hd.ticker, name: hd.name||'', market: hd.market, changePct, changeAmt, hasDod: !!dod };
+    }).filter(r => r.hasDod).sort((a,b) => b.changePct - a.changePct).slice(0, 5);
+
+    if (!ranked.length) {
+      view.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>前日比データがありません<div style="font-size:11px;margin-top:4px;color:var(--text3)">毎日更新すると翌日から表示されます</div></div>';
+      return;
+    }
+
+    const maxAbs = Math.max(...ranked.map(r => Math.abs(r.changePct)), 0.01);
+    const medals = ['🥇','🥈','🥉'];
+    view.innerHTML = `
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase">前日比 騰落率ランキング</div>
+      ${ranked.map((r, i) => {
+        const isUp = r.changePct >= 0;
+        const bar = Math.min(Math.abs(r.changePct) / maxAbs * 100, 100);
+        const color = isUp ? 'var(--green)' : 'var(--red)';
+        return `<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <div style="font-size:15px;min-width:22px;text-align:center">${medals[i] || (i+1)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <div>
+                <span class="ticker ${r.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px">${r.ticker}</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:4px">${r.name}</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${color}">${isUp?'+':''}${r.changePct.toFixed(2)}%</span>
+                <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.changeAmt).toLocaleString()}</div>
+              </div>
             </div>
-            <div style="text-align:right">
-              <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${color}">${isUp?'+':''}${r.pct.toFixed(2)}%</span>
-              <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.pnl).toLocaleString()}</div>
+            <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${bar}%;background:${isUp?'var(--green)':'var(--red)'};border-radius:2px"></div>
             </div>
           </div>
-          <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
-            <div style="height:100%;width:${bar}%;background:var(--accent);border-radius:2px"></div>
+        </div>`;
+      }).join('')}
+    `;
+  } else {
+    // 前日比データなし → 取得単価比ランキング（従来）
+    const ranked = keys.map(k => {
+      const hd = h[k];
+      const price = S.prices[hd.priceKey] || hd.avgCost;
+      const pct2 = hd.avgCost > 0 ? ((price - hd.avgCost) / hd.avgCost) * 100 : 0;
+      const pnl = (price - hd.avgCost) * hd.qty;
+      return { ticker: hd.ticker, name: hd.name||'', market: hd.market, pct: pct2, pnl };
+    }).sort((a,b) => b.pct - a.pct).slice(0, 5);
+
+    const maxAbs = Math.max(...ranked.map(r => Math.abs(r.pct)), 0.01);
+    const medals = ['🥇','🥈','🥉'];
+    view.innerHTML = `
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">取得単価比 損益率ランキング</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">※更新を続けると翌日から前日比に切り替わります</div>
+      ${ranked.map((r, i) => {
+        const isUp = r.pct >= 0;
+        const bar = Math.min(Math.abs(r.pct) / maxAbs * 100, 100);
+        const color = isUp ? 'var(--green)' : 'var(--red)';
+        return `<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <div style="font-size:15px;min-width:22px;text-align:center">${medals[i] || (i+1)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <div>
+                <span class="ticker ${r.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px">${r.ticker}</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:4px">${r.name}</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${color}">${isUp?'+':''}${r.pct.toFixed(2)}%</span>
+                <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.pnl).toLocaleString()}</div>
+              </div>
+            </div>
+            <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${bar}%;background:var(--accent);border-radius:2px"></div>
+            </div>
           </div>
-        </div>
-      </div>`;
-    }).join('')}
-  `;
+        </div>`;
+      }).join('')}
+    `;
+  }
 }
 
 function renderTodayTrades() {
@@ -1563,6 +1639,20 @@ function renderStockSummary() {
     const uc = clr(unrealized);
     const rc = clr(realized);
     const unrPct = hd.qty > 0 && price && hd.avgCost > 0 ? ((price - hd.avgCost) / hd.avgCost * 100) : null;
+
+    // 前日比
+    const dod = isHolding ? getDodForTicker(r.k) : null;
+    const dodHtml = dod
+      ? `<div style="background:var(--surface);border-radius:8px;padding:8px 10px">
+          <div class="s-label" style="font-size:10px">前日比</div>
+          <div class="mono ${clr(dod.change)}" style="font-size:13px;font-weight:600">${dod.change>=0?'+':''}${dod.changePct.toFixed(2)}%</div>
+          <div style="font-size:10px;color:${dod.change>=0?'var(--green)':'var(--red)'}">${dod.change>=0?'+':''}¥${Math.round(Math.abs(dod.change)*(hd.qty||1)).toLocaleString()}</div>
+        </div>`
+      : `<div style="background:var(--surface);border-radius:8px;padding:8px 10px">
+          <div class="s-label" style="font-size:10px">前日比</div>
+          <div style="font-size:12px;color:var(--text3)">—</div>
+        </div>`;
+
     return `<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">
         <div style="min-width:0;flex:1">
@@ -1578,7 +1668,7 @@ function renderStockSummary() {
           <span class="mono ${tc}" style="font-size:15px;font-weight:700;white-space:nowrap">${(total>=0?'+':'-')+'¥'+Math.abs(Math.round(total)).toLocaleString()}</span>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr ${isHolding?'1fr':''};gap:6px">
         <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
           <div class="s-label" style="font-size:10px">含み損益</div>
           <div class="mono ${uc}" style="font-size:13px;font-weight:600">${isHolding?(unrealized>=0?'+':'-')+'¥'+Math.abs(Math.round(unrealized)).toLocaleString():'—'}</div>
@@ -1588,11 +1678,12 @@ function renderStockSummary() {
           <div class="s-label" style="font-size:10px">実現損益</div>
           <div class="mono ${rc}" style="font-size:13px;font-weight:600">${realized!==0?(realized>=0?'+':'-')+'¥'+Math.abs(Math.round(realized)).toLocaleString():'—'}</div>
         </div>
-        <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
-          <div class="s-label" style="font-size:10px">配当</div>
-          <div class="mono" style="font-size:13px;font-weight:600;color:var(--yellow)">${dividend>0?'+¥'+Math.round(dividend).toLocaleString():'—'}</div>
-        </div>
+        ${isHolding ? dodHtml : ''}
       </div>
+      ${dividend>0?`<div style="margin-top:6px;background:var(--surface);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+        <div class="s-label" style="font-size:10px">配当</div>
+        <div class="mono" style="font-size:13px;font-weight:600;color:var(--yellow)">¥${Math.round(dividend).toLocaleString()}</div>
+      </div>`:''}
     </div>`;
   }).join('');
 }
