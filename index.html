@@ -173,17 +173,16 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div id="summaryGrid" class="summary-grid"></div>
     <div class="card">
       <div class="card-header">
-        <span class="card-title">📊 保有割合</span>
+        <span class="card-title">📊 ポートフォリオ</span>
         <div style="display:flex;gap:6px">
-          <button id="pieToggle_ticker" class="btn btn-sm btn-primary" onclick="setPieMode('ticker')" style="padding:4px 10px;font-size:11px">銘柄別</button>
-          <button id="pieToggle_sector" class="btn btn-sm btn-ghost" onclick="setPieMode('sector')" style="padding:4px 10px;font-size:11px">セクター別</button>
+          <button id="pieToggle_ticker" class="btn btn-sm btn-primary" onclick="setPieMode('ticker')" style="padding:4px 10px;font-size:11px">損益率TOP5</button>
+          <button id="pieToggle_sector" class="btn btn-sm btn-ghost" onclick="setPieMode('sector')" style="padding:4px 10px;font-size:11px">今日の取引</button>
         </div>
       </div>
       <div class="card-body">
-        <div id="pieTickerView"><div class="chart-wrap"><canvas id="pieChart"></canvas></div></div>
+        <div id="pieTickerView"><div id="pnlRankingView"></div></div>
         <div id="pieSectorView" style="display:none">
-          <div class="chart-wrap"><canvas id="sectorPieChart"></canvas></div>
-          <div id="sectorTagArea" style="margin-top:12px"></div>
+          <div id="todayTradesView"></div>
         </div>
       </div>
     </div>
@@ -208,7 +207,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
       <div id="divYearTotal" style="display:none;padding:8px 16px 0;border-top:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,rgba(29,111,232,.07),rgba(29,111,232,.03));border-radius:10px">
-          <span style="font-size:12px;font-weight:700;color:var(--text3)" id="divYearTotalLabel">2024年 合計受取</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text3)" id="divYearTotalLabel">合計受取</span>
           <span style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent)" id="divYearTotalValue">¥0</span>
         </div>
       </div>
@@ -988,39 +987,11 @@ function renderCharts(){
 }
 
 function renderPieChart() {
-  const h=computeHoldings();
-  const keys=Object.keys(h).filter(k=>h[k].qty>0);
-  killChart('pie');
-  if(!keys.length) return;
-  const clrs=['#38bdf8','#4ade80','#fbbf24','#f87171','#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9','#2dd4bf'];
-  charts['pie']=new Chart(el('pieChart'),{
-    type:'doughnut',
-    data:{labels:keys.map(k=>h[k].ticker),datasets:[{data:keys.map(k=>(S.prices[h[k].priceKey]||h[k].avgCost)*h[k].qty),backgroundColor:clrs,borderWidth:2,borderColor:'#ffffff'}]},
-    options:{...cOpts,cutout:'65%'}
-  });
+  renderPnlRanking();
 }
 
-// ===================== SECTOR / PIE MODE =====================
+// ===================== RANKING / TODAY TRADES =====================
 let pieMode = 'ticker';
-
-const SECTOR_PRESETS = {
-  '金融': ['8473','8591','8593','9432','8316','8411'],
-  '通信': ['9434','9433','9984','9812'],
-  '製造・素材': ['5401','5020','7203','6758','7011'],
-  '小売・サービス': ['2353','2914','3133','3193','8214','2667','3607','3242'],
-  '不動産・その他': ['1870','7013','3598','4202','8729','7692','2353','3133'],
-};
-
-function getSectorLabel(ticker) {
-  // ユーザーが手動でつけたタグを優先
-  if (!S.sectorTags) S.sectorTags = {};
-  if (S.sectorTags[ticker]) return S.sectorTags[ticker];
-  // プリセットから自動推定
-  for (const [sector, tickers] of Object.entries(SECTOR_PRESETS)) {
-    if (tickers.includes(ticker)) return sector;
-  }
-  return 'その他';
-}
 
 function setPieMode(mode) {
   pieMode = mode;
@@ -1030,60 +1001,87 @@ function setPieMode(mode) {
   el('pieToggle_sector').style.cssText = 'padding:4px 10px;font-size:11px';
   el('pieTickerView').style.display = mode==='ticker' ? '' : 'none';
   el('pieSectorView').style.display = mode==='sector' ? '' : 'none';
-  if (mode === 'sector') renderSectorPie();
+  if (mode==='ticker') renderPnlRanking();
+  else renderTodayTrades();
 }
 
-function renderSectorPie() {
-  killChart('sectorPie');
+function renderPnlRanking() {
   const h = computeHoldings();
   const keys = Object.keys(h).filter(k => h[k].qty > 0);
-  if (!keys.length) return;
-  if (!S.sectorTags) S.sectorTags = {};
-
-  // セクター別評価額集計
-  const sectorMap = {};
-  for (const k of keys) {
+  const view = el('pnlRankingView');
+  if (!keys.length) {
+    view.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>保有銘柄がありません</div>';
+    return;
+  }
+  const ranked = keys.map(k => {
     const hd = h[k];
     const price = S.prices[hd.priceKey] || hd.avgCost;
-    const val = price * hd.qty;
-    const sector = getSectorLabel(hd.ticker);
-    sectorMap[sector] = (sectorMap[sector] || 0) + val;
-  }
+    const pct = hd.avgCost > 0 ? ((price - hd.avgCost) / hd.avgCost) * 100 : 0;
+    const pnl = (price - hd.avgCost) * hd.qty;
+    return { ticker: hd.ticker, name: hd.name||'', market: hd.market, pct, pnl };
+  }).sort((a,b) => b.pct - a.pct).slice(0, 5);
 
-  const sectors = Object.keys(sectorMap);
-  const clrs = ['#38bdf8','#4ade80','#fbbf24','#f87171','#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9','#2dd4bf'];
-  charts['sectorPie'] = new Chart(el('sectorPieChart'), {
-    type: 'doughnut',
-    data: {
-      labels: sectors,
-      datasets: [{ data: sectors.map(s => Math.round(sectorMap[s])), backgroundColor: clrs, borderWidth: 2, borderColor: '#ffffff' }]
-    },
-    options: { ...cOpts, cutout: '65%' }
-  });
+  const maxAbs = Math.max(...ranked.map(r => Math.abs(r.pct)), 0.01);
+  const medals = ['🥇','🥈','🥉'];
 
-  // セクタータグ編集エリア
-  const tagArea = el('sectorTagArea');
-  const SECTORS = ['金融','通信','製造・素材','小売・サービス','不動産・その他','インフラ','ヘルスケア','IT・テック','その他'];
-  tagArea.innerHTML = `
-    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📝 銘柄のセクターを変更</div>
-    ${keys.map(k => {
-      const hd = h[k];
-      const current = getSectorLabel(hd.ticker);
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px"><span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:12px">${hd.ticker}</span> ${hd.name||''}</span>
-        <select onchange="setSectorTag('${hd.ticker}',this.value)" style="background:var(--bg);color:var(--text1);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px">
-          ${SECTORS.map(s => `<option value="${s}" ${s===current?'selected':''}>${s}</option>`).join('')}
-        </select>
+  view.innerHTML = `
+    <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase">取得単価比 損益率ランキング</div>
+    ${ranked.map((r, i) => {
+      const isUp = r.pct >= 0;
+      const bar = Math.min(Math.abs(r.pct) / maxAbs * 100, 100);
+      const color = isUp ? 'var(--green)' : 'var(--red)';
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <div style="font-size:15px;min-width:22px;text-align:center">${medals[i] || (i+1)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <div>
+              <span class="ticker ${r.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px">${r.ticker}</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:4px">${r.name}</span>
+            </div>
+            <div style="text-align:right">
+              <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${color}">${isUp?'+':''}${r.pct.toFixed(2)}%</span>
+              <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.pnl).toLocaleString()}</div>
+            </div>
+          </div>
+          <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${bar}%;background:${color};border-radius:2px"></div>
+          </div>
+        </div>
       </div>`;
     }).join('')}
   `;
 }
 
-function setSectorTag(ticker, sector) {
-  if (!S.sectorTags) S.sectorTags = {};
-  S.sectorTags[ticker] = sector;
-  save();
-  renderSectorPie();
+function renderTodayTrades() {
+  const view = el('todayTradesView');
+  const todayStr = today();
+  const trades = (S.trades||[]).filter(t => t.date === todayStr);
+  if (!trades.length) {
+    view.innerHTML = '<div class="empty"><div class="empty-icon">📅</div>今日の取引はありません</div>';
+    return;
+  }
+  view.innerHTML = `
+    <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase">TODAY の取引 ${trades.length}件</div>
+    ${trades.map(t => {
+      const isBuy = t.type === 'buy';
+      const total = t.price * t.qty + (isBuy ? (t.fee||0) : -(t.fee||0));
+      const color = isBuy ? 'var(--red)' : 'var(--green)';
+      const bg = isBuy ? 'rgba(22,163,74,.1)' : 'rgba(220,38,38,.08)';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:${bg};flex-shrink:0">${isBuy?'📈':'📉'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <span class="ticker ${t.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px">${t.ticker}</span>
+              <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:5px;background:${bg};color:${isBuy?'var(--green)':'var(--red)'}">${isBuy?'買い':'売り'}</span>
+            </div>
+            <span style="font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${color}">${isBuy?'-':'+'}¥${Math.round(total).toLocaleString()}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.qty.toLocaleString()}株 @ ¥${t.price.toLocaleString()} ${t.name?'· '+t.name:''}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
 }
 
 function renderLineChart() {
@@ -1260,20 +1258,9 @@ function renderDivChart() {
     // 月平均をdivSummary下に追記
     var avgEl=el('divAvgText');
     if(avgEl)avgEl.textContent='月平均：'+avg.toLocaleString()+' 円';
-
-    // 年間合計を表示
-    var totalEl=el('divYearTotal');
-    var totalLbl=el('divYearTotalLabel');
-    var totalVal=el('divYearTotalValue');
-    if(totalEl&&totalLbl&&totalVal){
-      if(total>0){
-        totalEl.style.display='';
-        totalLbl.textContent=yearStr+'年 合計受取';
-        totalVal.textContent='¥'+total.toLocaleString();
-      } else {
-        totalEl.style.display='none';
-      }
-    }
+    // 年間合計表示
+    var totalEl=el('divYearTotal'),totalLbl=el('divYearTotalLabel'),totalVal=el('divYearTotalValue');
+    if(totalEl){if(total>0){totalEl.style.display='';if(totalLbl)totalLbl.textContent=yearStr+'年 合計受取';if(totalVal)totalVal.textContent='¥'+total.toLocaleString();}else{totalEl.style.display='none';}}
 
     charts['div']=new Chart(el('divChart'),{
       type:'bar',
@@ -1298,10 +1285,7 @@ function renderDivChart() {
       }
     });
   } else {
-    // 累計モードでは年間合計バーを非表示
-    var totalEl=el('divYearTotal');
-    if(totalEl)totalEl.style.display='none';
-
+    var totalEl=el('divYearTotal');if(totalEl)totalEl.style.display='none';
     // 累計折れ線グラフ（全期間）
     let cum = 0;
     const labels = [], data = [];
