@@ -153,6 +153,16 @@ tr:active td{background:rgba(56,189,248,.05);}
   .form-grid{grid-template-columns:repeat(3,1fr);}
   .modal{border-radius:24px;margin:auto;margin-bottom:0;}
 }
+.amounts-hidden .s-value,
+.amounts-hidden .mono,
+.amounts-hidden .holding-card .up,
+.amounts-hidden .holding-card .down,
+.amounts-hidden .holding-card .neutral,
+.amounts-hidden #summaryGrid .s-value {
+  filter: blur(8px);
+  user-select: none;
+  transition: filter .2s;
+}
 </style>
 </head>
 <body>
@@ -161,6 +171,9 @@ tr:active td{background:rgba(56,189,248,.05);}
   <div class="logo"><span class="logo-p">サラリーマンの</span>貯金箱</div>
   <div class="topbar-right">
     <span class="updated-text" id="updatedText" style="display:none">--:--</span>
+    <button id="hideAmountsBtn" onclick="toggleHideAmounts()" style="background:none;border:none;padding:5px 6px;cursor:pointer;color:var(--text2);display:flex;align-items:center" title="金額を隠す">
+      <svg id="hideAmountsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
     <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()">
       <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
       更新
@@ -2569,6 +2582,19 @@ function calSelectDay(dateStr) {
       </div>
     </div>
   `;
+}
+
+let _amountsHidden = false;
+function toggleHideAmounts() {
+  _amountsHidden = !_amountsHidden;
+  document.body.classList.toggle('amounts-hidden', _amountsHidden);
+  const icon = el('hideAmountsIcon');
+  if (_amountsHidden) {
+    // 目を閉じたアイコン
+    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  } else {
+    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
 }
 
 const el=id=>document.getElementById(id);
