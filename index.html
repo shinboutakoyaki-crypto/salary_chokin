@@ -199,6 +199,12 @@ tr:active td{background:rgba(56,189,248,.05);}
         <button class="btn btn-sm btn-ghost" id="linePeriod_3m" onclick="setLinePeriod('3m')" style="padding:3px 10px;font-size:11px">3ヶ月</button>
         <button class="btn btn-sm btn-ghost" id="linePeriod_all" onclick="setLinePeriod('all')" style="padding:3px 10px;font-size:11px">全期間</button>
       </div>
+      <div id="pnlSummaryBar" style="display:none;padding:8px 16px 0">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(220,38,38,.06);border-radius:10px;border:1px solid rgba(220,38,38,.15)">
+          <span style="font-size:12px;font-weight:700;color:var(--text3)" id="pnlSummaryLabel">累計実現損益</span>
+          <span style="font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:#dc2626" id="pnlSummaryValue">¥0</span>
+        </div>
+      </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
     </div>
     <div class="card">
@@ -1010,6 +1016,7 @@ function renderLineChart() {
   };
 
   if (assetMode === 'asset') {
+    const bar = el('pnlSummaryBar'); if (bar) bar.style.display = 'none';
     const hist = filterByPeriod(S.pnlHistory, 'date');
     if (!hist.length) {
       ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -1094,9 +1101,35 @@ function renderLineChart() {
       cur.setMonth(cur.getMonth() + 1);
     }
 
+    // 月別の実現損益（その月だけの額）も計算
+    const monthlyPnl = {};
+    for (const t of trades) {
+      const ym = t.date.slice(0, 7);
+      monthlyPnl[ym] = (monthlyPnl[ym] || 0) + (t.realizedPnl || 0);
+    }
+
+    // サマリーバー表示（累計）
+    const bar = el('pnlSummaryBar'), lbl = el('pnlSummaryLabel'), val = el('pnlSummaryValue');
+    if (bar) {
+      bar.style.display = '';
+      if (lbl) lbl.textContent = '累計実現損益';
+      if (val) val.textContent = (cum >= 0 ? '+' : '') + '¥' + Math.round(cum).toLocaleString();
+    }
+
     const gradPnl = ctx.createLinearGradient(0,0,0,210);
     gradPnl.addColorStop(0,'rgba(220,38,38,.2)');
     gradPnl.addColorStop(1,'rgba(220,38,38,.0)');
+
+    // ラベルとymの対応テーブルを保持
+    const ymList = [];
+    {
+      let c2 = new Date(allYms[0] + '-01');
+      const ed = new Date(endYm + '-01');
+      while (c2 <= ed) {
+        ymList.push(c2.getFullYear() + '-' + String(c2.getMonth()+1).padStart(2,'0'));
+        c2.setMonth(c2.getMonth() + 1);
+      }
+    }
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1115,7 +1148,25 @@ function renderLineChart() {
           borderWidth: 2.5
         }]
       },
-      options: { ...cOpts, scales: commonScaleOpts }
+      options: {
+        ...cOpts,
+        scales: commonScaleOpts,
+        onClick: (e, elements) => {
+          if (!elements.length) {
+            // 何もないところをクリック→累計に戻す
+            if (lbl) lbl.textContent = '累計実現損益';
+            if (val) val.textContent = (cum >= 0 ? '+' : '') + '¥' + Math.round(cum).toLocaleString();
+            return;
+          }
+          const idx = elements[0].index;
+          const ym = ymList[idx];
+          const monthly = Math.round(monthlyPnl[ym] || 0);
+          const cumVal = data[idx];
+          if (lbl) lbl.textContent = labels[idx] + ' の実現損益';
+          if (val) val.textContent = (monthly >= 0 ? '+' : '') + '¥' + monthly.toLocaleString()
+            + '　累計 ¥' + cumVal.toLocaleString();
+        }
+      }
     });
   }
 }
