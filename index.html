@@ -283,6 +283,10 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div class="section-header">
       <div class="section-title">収支カレンダー</div>
     </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📊 月間サマリー</span></div>
+      <div id="calMonthlySummary" class="card-body"></div>
+    </div>
     <div class="card" style="overflow:visible">
       <div class="card-header" style="padding:10px 14px">
         <button onclick="calPrevMonth()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2);padding:0 8px">‹</button>
@@ -303,10 +307,6 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
     </div>
     <div id="calDayDetail" style="display:none"></div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">📊 月間サマリー</span></div>
-      <div id="calMonthlySummary" class="card-body"></div>
-    </div>
   </div>
 
   <nav class="bottom-nav">
