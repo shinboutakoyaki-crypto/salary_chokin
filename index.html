@@ -764,7 +764,7 @@ function snapPnl(){
   let unr=0;
   for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||0;unr+=(p-hd.avgCost)*hd.qty;}
   const real=S.trades.filter(t=>t.type==='sell').reduce((s,t)=>s+(t.realizedPnl||0),0);
-  const today=new Date().toISOString().split('T')[0];
+  const today=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
   const snap={date:today,unrealized:Math.round(unr),realized:Math.round(real)};
   const i=S.pnlHistory.findIndex(p=>p.date===today);
   if(i>=0)S.pnlHistory[i]=snap;else S.pnlHistory.push(snap);
@@ -2368,7 +2368,7 @@ function exportBackup() {
   const blob = new Blob([data], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const date = new Date().toISOString().slice(0,10);
+  const date = (()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
   a.href = url;
   a.download = `貯金箱バックアップ_${date}.json`;
   a.click();
@@ -2500,7 +2500,7 @@ function renderCalendar() {
     let subHtml = '';
     if (hasPnl) {
       const pnlVal = Math.round(data.pnl);
-      subHtml += `<div style="font-size:9px;font-weight:700;color:${pnlVal>=0?'var(--green)':'var(--red)'};line-height:1.2;margin-top:1px">${pnlVal>=0?'+':''}${(Math.abs(pnlVal)>=10000?(Math.abs(pnlVal)/10000).toFixed(0)+'万':Math.abs(pnlVal).toLocaleString())}</div>`;
+      subHtml += `<div style="font-size:9px;font-weight:700;color:${pnlVal>=0?'var(--green)':'var(--red)'};line-height:1.2;margin-top:1px">${pnlVal<0?'-':''}${(Math.abs(pnlVal)>=10000?(Math.abs(pnlVal)/10000).toFixed(0)+'万':Math.abs(pnlVal).toLocaleString())}</div>`;
     }
     if (hasDiv) {
       const divVal = Math.round(data.div);
@@ -2519,7 +2519,7 @@ function renderCalendar() {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
       <div style="text-align:center;padding:10px 0">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">実現損益</div>
-        <div style="font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${totalPnl>=0?'var(--green)':'var(--red)'}">${totalPnl>=0?'+':''}¥${Math.round(Math.abs(totalPnl)).toLocaleString()}</div>
+        <div style="font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${totalPnl>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(totalPnl)).toLocaleString()}</div>
       </div>
       <div style="text-align:center;padding:10px 0;border-left:1px solid var(--border);border-right:1px solid var(--border)">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">配当金</div>
@@ -2564,7 +2564,7 @@ function calSelectDay(dateStr) {
               <span style="font-size:11px;color:var(--text3);margin-left:5px">${t.name||''}</span>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">売却 ${t.qty}株 @ ¥${t.price.toLocaleString()}</div>
             </div>
-            <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${(t.realizedPnl||0)>=0?'var(--green)':'var(--red)'}">${(t.realizedPnl||0)>=0?'+':''}¥${Math.round(Math.abs(t.realizedPnl||0)).toLocaleString()}</span>
+            <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${(t.realizedPnl||0)>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(t.realizedPnl||0)).toLocaleString()}</span>
           </div>`).join('')}
         ${divs.map(d => `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(217,119,6,.06);border-radius:8px">
@@ -2573,7 +2573,7 @@ function calSelectDay(dateStr) {
               <span style="font-size:11px;color:var(--text3);margin-left:5px">${d.name||''}</span>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">配当金</div>
             </div>
-            <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--yellow)">+¥${Math.round(d.amount).toLocaleString()}</span>
+            <span style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--yellow)">¥${Math.round(d.amount).toLocaleString()}</span>
           </div>`).join('')}
         ${(sells.length||divs.length)&&(sells.length+divs.length>1)?`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2)">
@@ -2600,7 +2600,7 @@ function toggleHideAmounts() {
 
 const el=id=>document.getElementById(id);
 const v=id=>el(id).value;
-const today=()=>new Date().toISOString().split('T')[0];
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 
 load();renderAll();
 </script>
