@@ -276,6 +276,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
     </div>
     <div id="divSummary" class="summary-grid"></div>
+    <div id="incomeAssetSection"></div>
     <div id="dividendsBody"></div>
   </div>
 
@@ -333,7 +334,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 </nav>
 
 <!-- ACCOUNT MODAL -->
-<div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
+<div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('incomeAssetModal');renderIncomeAssetList()"><span style="font-size:18px">📦</span> インカム銘柄登録</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
 <div class="modal-overlay" id="accountModal">
   <div class="modal" style="max-width:320px">
     <div class="modal-header"><h2 class="modal-title">口座種別を選択</h2></div>
@@ -399,15 +400,26 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div class="modal-handle"></div>
     <div class="modal-header"><div class="modal-title">配当入力</div><button class="modal-close" onclick="closeModal('dividendModal')">✕</button></div>
     <div class="modal-body">
+      <div id="ia_quickfill_wrap" style="display:none;margin-bottom:12px">
+        <label class="form-label">インカム銘柄から選択</label>
+        <select id="ia_quickfill" class="form-select" onchange="fillDivFromIncome(this.value)">
+          <option value="">-- 選択して自動入力 --</option>
+        </select>
+      </div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">受取日 *</label><input type="date" id="d_date" class="form-input"></div>
-        <div class="form-group"><label class="form-label">市場 *</label><select id="d_market" class="form-select"><option value="JP">🇯🇵 日本株</option><option value="US">🇺🇸 米国株</option></select></div>
-        <div class="form-group"><label class="form-label">コード *</label><input type="text" id="d_ticker" class="form-input" placeholder="7203" oninput="this.value=this.value.toUpperCase()"></div>
-        <div class="form-group"><label class="form-label">銘柄名</label><input type="text" id="d_name" class="form-input"></div>
-        <div class="form-group"><label class="form-label">受取金額 *</label><input type="number" id="d_amount" class="form-input" step="0.01" inputmode="decimal"></div>
-        <div class="form-group"><label class="form-label">税率 (%)</label><input type="number" id="d_tax" class="form-input" value="20.315" step="0.001"></div>
-        <div class="form-group"><label class="form-label">1株配当</label><input type="number" id="d_dps" class="form-input" step="0.01" inputmode="decimal"></div>
-        <div class="form-group"><label class="form-label">株数</label><input type="number" id="d_qty" class="form-input" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">口座</label>
+          <select id="d_account" class="form-select">
+            <option value="tokutei">特定口座</option>
+            <option value="nisa">新NISA</option>
+            <option value="general">一般口座</option>
+          </select>
+        </div>
+        <div class="form-group full"><label class="form-label">コード / 銘柄名 *</label><input type="text" id="d_ticker" class="form-input" placeholder="7203 / SCHD / RSCHD など" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="form-group full"><label class="form-label">銘柄名</label><input type="text" id="d_name" class="form-input" placeholder="トヨタ自動車 / 楽天SCHD"></div>
+        <div class="form-group full"><label class="form-label">受取金額 (税引後) *</label><input type="number" id="d_amount" class="form-input" step="1" inputmode="decimal" placeholder="0"></div>
+        <input type="hidden" id="d_market" value="JP">
+        <input type="hidden" id="d_tax" value="20.315">
       </div>
       <div class="form-actions">
         <button class="btn btn-ghost" onclick="closeModal('dividendModal')">キャンセル</button>
@@ -435,6 +447,41 @@ tr:active td{background:rgba(56,189,248,.05);}
         <button class="btn btn-ghost" onclick="closeModal('alertModal')">キャンセル</button>
         <button class="btn btn-primary" onclick="addAlert()">💾 保存</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- INCOME ASSET MODAL -->
+<div class="modal-overlay" id="incomeAssetModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title">📦 インカム銘柄登録</div><button class="modal-close" onclick="closeModal('incomeAssetModal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;padding:8px 12px;background:var(--bg);border-radius:8px">💡 投資信託・ETF・REITなど、取引登録なしで配当だけ管理したい銘柄を登録できます</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">種別</label>
+          <select id="ia_type" class="form-select">
+            <option value="投資信託">投資信託</option>
+            <option value="ETF">ETF</option>
+            <option value="REIT">REIT</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">市場</label>
+          <select id="ia_market" class="form-select">
+            <option value="JP">🇯🇵 日本</option>
+            <option value="US">🇺🇸 米国</option>
+          </select>
+        </div>
+        <div class="form-group full"><label class="form-label">コード / 略称 *</label><input type="text" id="ia_ticker" class="form-input" placeholder="SCHD / 楽天SCHD" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="form-group full"><label class="form-label">銘柄名 *</label><input type="text" id="ia_name" class="form-input" placeholder="楽天・高配当株式・米国ファンド"></div>
+        <div class="form-group full"><label class="form-label">メモ</label><input type="text" id="ia_memo" class="form-input" placeholder="楽天証券で保有など"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('incomeAssetModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="addIncomeAsset()">💾 登録</button>
+      </div>
+      <div id="incomeAssetList" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
     </div>
   </div>
 </div>
@@ -545,7 +592,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},pnlHistory:[],lastUpdated:null};
+let S={trades:[],dividends:[],alerts:[],prices:{},pnlHistory:[],lastUpdated:null,incomeAssets:[]};
 let csvImportData=null,csvDivData=null;
 
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
@@ -710,7 +757,7 @@ const pct=v=>(v>=0?'+':'')+v.toFixed(2)+'%';
 const clr=v=>v>0?'up':v<0?'down':'neutral';
 const mkChip=(pos,label)=>`<span class="chip chip-${pos?'up':'down'}">${label}</span>`;
 
-function renderAll(){renderSummary();renderHoldings();renderTrades();renderDividends();renderCharts();updateUpdated();}
+function renderAll(){renderSummary();renderHoldings();renderTrades();renderDividends();renderIncomeSection();renderCharts();updateUpdated();}
 
 function renderSummary(){
   const h=computeHoldings();
@@ -919,6 +966,46 @@ function renderTrades(){
       </div>
     </div>`;
   }).join('');
+}
+
+function renderIncomeSection(){
+  const wrap=el('incomeAssetSection');
+  if(!wrap)return;
+  if(!S.incomeAssets||!S.incomeAssets.length){wrap.innerHTML='';return;}
+
+  // インカム銘柄ごとの配当合計を集計
+  const divMap={};
+  for(const d of S.dividends){
+    const key=d.market+'_'+d.ticker;
+    divMap[key]=(divMap[key]||0)+d.amount;
+  }
+
+  wrap.innerHTML=`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title">📦 インカム銘柄</span>
+        <button onclick="openModal('incomeAssetModal');renderIncomeAssetList()" style="font-size:11px;padding:3px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);cursor:pointer">＋ 管理</button>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+        ${S.incomeAssets.map(a=>{
+          const key=a.market+'_'+a.ticker;
+          const total=divMap[key]||0;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg);border-radius:10px">
+            <div>
+              <span style="font-size:10px;padding:2px 6px;border-radius:5px;background:rgba(29,111,232,.1);color:var(--accent);font-weight:700;margin-right:6px">${a.type}</span>
+              <span style="font-weight:700;font-size:13px">${a.ticker}</span>
+              <span style="font-size:12px;color:var(--text2);margin-left:5px">${a.name}</span>
+              ${a.memo?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.memo}</div>`:''}
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--yellow)">${total>0?'¥'+Math.round(total).toLocaleString():'—'}</div>
+              <div style="font-size:10px;color:var(--text3)">累計配当</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function renderDividends(){
@@ -1588,16 +1675,81 @@ function addTrade(){
 }
 
 function addDividend(){
-  const date=v('d_date'),market=v('d_market'),ticker=v('d_ticker').toUpperCase().trim();
+  const date=v('d_date'),ticker=v('d_ticker').toUpperCase().trim();
   const name=v('d_name').trim(),amount=parseFloat(v('d_amount'));
-  const tax=parseFloat(v('d_tax'))||20.315,dps=parseFloat(v('d_dps'))||null,qty=parseFloat(v('d_qty'))||null;
+  const account=v('d_account')||'tokutei';
+  const market=el('d_market')?v('d_market'):'JP';
+  // 口座で税率自動設定
+  const tax = account==='nisa' ? 0 : 20.315;
   if(!date||!ticker||!amount){alert('必須項目（*）を入力してください');return;}
-  S.dividends.push({date,market,ticker,name,amount,tax,dps,qty});
+  S.dividends.push({date,market,ticker,name,amount,tax,account,dps:null,qty:null});
   save();closeModal('dividendModal');renderAll();
 }
 
+function addIncomeAsset(){
+  const ticker = el('ia_ticker').value.toUpperCase().trim();
+  const name = el('ia_name').value.trim();
+  const type = el('ia_type').value;
+  const market = el('ia_market').value;
+  const memo = el('ia_memo').value.trim();
+  if(!ticker||!name){alert('コードと銘柄名は必須です');return;}
+  if(!S.incomeAssets) S.incomeAssets=[];
+  if(S.incomeAssets.find(a=>a.ticker===ticker&&a.market===market)){alert('同じコードが既に登録されています');return;}
+  S.incomeAssets.push({ticker,name,type,market,memo});
+  save();
+  ['ia_ticker','ia_name','ia_memo'].forEach(id=>el(id).value='');
+  el('ia_type').value='投資信託';
+  renderIncomeAssetList();
+  renderAll();
+}
+
+function renderIncomeAssetList(){
+  if(!S.incomeAssets) S.incomeAssets=[];
+  const wrap=el('incomeAssetList');
+  if(!wrap)return;
+  if(!S.incomeAssets.length){wrap.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:8px">登録済みのインカム銘柄はありません</div>';return;}
+  wrap.innerHTML=S.incomeAssets.map((a,i)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg);border-radius:10px">
+      <div>
+        <span style="font-size:10px;padding:2px 6px;border-radius:5px;background:rgba(29,111,232,.1);color:var(--accent);font-weight:700;margin-right:6px">${a.type}</span>
+        <span style="font-weight:700;font-size:13px">${a.ticker}</span>
+        <span style="font-size:12px;color:var(--text2);margin-left:5px">${a.name}</span>
+        ${a.memo?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.memo}</div>`:''}
+      </div>
+      <button onclick="delIncomeAsset(${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px 8px">🗑</button>
+    </div>
+  `).join('');
+}
+
+function delIncomeAsset(i){
+  if(!confirm('削除しますか？'))return;
+  S.incomeAssets.splice(i,1);
+  save();renderIncomeAssetList();renderAll();
+}
+
+function fillDivFromIncome(idx){
+  if(idx==='')return;
+  const a=S.incomeAssets[parseInt(idx)];
+  if(!a)return;
+  el('d_ticker').value=a.ticker;
+  el('d_name').value=a.name;
+  if(el('d_market'))el('d_market').value=a.market;
+}
+
+function updateDivQuickfill(){
+  if(!S.incomeAssets||!S.incomeAssets.length){
+    const w=el('ia_quickfill_wrap');if(w)w.style.display='none';return;
+  }
+  const w=el('ia_quickfill_wrap'),sel=el('ia_quickfill');
+  if(!w||!sel)return;
+  w.style.display='';
+  const cur=sel.value;
+  sel.innerHTML='<option value="">-- 選択して自動入力 --</option>'
+    +S.incomeAssets.map((a,i)=>`<option value="${i}">[${a.type}] ${a.ticker} ${a.name}</option>`).join('');
+  sel.value=cur;
+}
+
 function addAlert(){
-  const market=v('a_market'),ticker=v('a_ticker').toUpperCase().trim();
   const name=v('a_name').trim(),targetYield=parseFloat(v('a_yield')),dps=parseFloat(v('a_dps'))||null;
   if(!ticker||!targetYield){alert('必須項目（*）を入力してください');return;}
   S.alerts.push({market,ticker,name,targetYield,dps});
@@ -2110,7 +2262,7 @@ function importBackup(input) {
 アラート: ${data.alerts.length}件
 
 ⚠️ 現在のデータは上書きされます`)) return;
-      S = { trades:[], dividends:[], alerts:[], prices:{}, pnlHistory:[], lastUpdated:null, ...data };
+      S = { trades:[], dividends:[], alerts:[], prices:{}, pnlHistory:[], lastUpdated:null, incomeAssets:[], ...data };
       save();
       renderAll();
       input.value = '';
@@ -2132,7 +2284,10 @@ function openModal(id){
     }
     if(!el('t_date').value)el('t_date').value=today();
   }
-  if(id==='dividendModal'&&!el('d_date').value)el('d_date').value=today();
+  if(id==='dividendModal'){
+    if(!el('d_date').value)el('d_date').value=today();
+    updateDivQuickfill();
+  }
   el(id).classList.add('open');document.body.style.overflow='hidden';
 }
 function closeModal(id){el(id).classList.remove('open');document.body.style.overflow='';}
