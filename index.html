@@ -1063,13 +1063,35 @@ function renderLineChart() {
       ctx.fillText('売却履歴がありません', canvas.width/2, canvas.height/2);
       return;
     }
+
+    // 月別に累計を集計
+    const monthMap = {};
     let cum = 0;
-    const labels = [], data = [];
     for (const t of trades) {
       cum += t.realizedPnl || 0;
-      labels.push(t.date.slice(5));
-      data.push(Math.round(cum));
+      const ym = t.date.slice(0, 7); // "2024-03"
+      monthMap[ym] = Math.round(cum);
     }
+
+    // 最初の月から今月まで全月を生成し、売却なし月は前月キャリー
+    const allYms = Object.keys(monthMap).sort();
+    const startYm = allYms[0];
+    const now = new Date();
+    const endYm = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+
+    const labels = [], data = [];
+    let cur = new Date(startYm + '-01');
+    const endDate = new Date(endYm + '-01');
+    let lastVal = 0;
+    while (cur <= endDate) {
+      const ym = cur.getFullYear() + '-' + String(cur.getMonth()+1).padStart(2,'0');
+      const label = ym.slice(2).replace('-','/'); // "24/03"
+      if (monthMap[ym] !== undefined) lastVal = monthMap[ym];
+      labels.push(label);
+      data.push(lastVal);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+
     const gradPnl = ctx.createLinearGradient(0,0,0,210);
     gradPnl.addColorStop(0,'rgba(220,38,38,.2)');
     gradPnl.addColorStop(1,'rgba(220,38,38,.0)');
@@ -1083,13 +1105,12 @@ function renderLineChart() {
           data,
           borderColor: '#dc2626',
           backgroundColor: gradPnl,
-          fill: true, tension: .4,
-          pointRadius: data.length <= 10 ? 5 : data.length <= 30 ? 3 : 2,
+          fill: true, tension: .3,
+          pointRadius: data.length <= 12 ? 5 : data.length <= 24 ? 3 : 2,
           pointBackgroundColor: '#dc2626',
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
-          borderWidth: 2.5,
-          borderDash: []
+          borderWidth: 2.5
         }]
       },
       options: { ...cOpts, scales: commonScaleOpts }
