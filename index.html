@@ -278,7 +278,6 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
     </div>
     <div id="divSummary" class="summary-grid"></div>
-    <div id="incomeAssetSection"></div>
     <div id="dividendsBody"></div>
   </div>
 
@@ -336,7 +335,37 @@ tr:active td{background:rgba(56,189,248,.05);}
 </nav>
 
 <!-- ACCOUNT MODAL -->
-<div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('incomeAssetModal');renderIncomeAssetList()"><span style="font-size:18px">📦</span> インカム銘柄登録</button><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
+<div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button>
+<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button>
+<div style="border-top:1px solid var(--border);margin:4px 0"></div>
+<!-- インカム銘柄アコーディオン -->
+<div style="border:1px solid var(--border2);border-radius:12px;overflow:hidden">
+  <button onclick="toggleIncomeAccordion()" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:none;border:none;cursor:pointer;font-family:inherit">
+    <span style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text)"><span style="font-size:18px">📦</span> インカム銘柄</span>
+    <svg id="incomeAccordionIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16" stroke-width="2.5" style="transition:transform .2s;flex-shrink:0"><polyline points="6,9 12,15 18,9"/></svg>
+  </button>
+  <div id="incomeAccordionBody" style="display:none;padding:0 12px 12px;display:none">
+    <div id="incomeAccordionList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <input type="text" id="menu_ia_ticker" class="form-input" placeholder="コード" style="font-size:12px;padding:7px 10px" oninput="this.value=this.value.toUpperCase()">
+      <input type="text" id="menu_ia_name" class="form-input" placeholder="銘柄名" style="font-size:12px;padding:7px 10px">
+      <select id="menu_ia_type" class="form-select" style="font-size:12px;padding:7px 10px">
+        <option value="投資信託">投資信託</option>
+        <option value="ETF">ETF</option>
+        <option value="REIT">REIT</option>
+        <option value="その他">その他</option>
+      </select>
+      <select id="menu_ia_market" class="form-select" style="font-size:12px;padding:7px 10px">
+        <option value="JP">🇯🇵 日本</option>
+        <option value="US">🇺🇸 米国</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;padding:9px" onclick="addIncomeAssetFromMenu()">＋ 登録</button>
+  </div>
+</div>
+<div style="border-top:1px solid var(--border);margin:4px 0"></div>
+<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
 <div class="modal-overlay" id="accountModal">
   <div class="modal" style="max-width:320px">
     <div class="modal-header"><h2 class="modal-title">口座種別を選択</h2></div>
@@ -1008,8 +1037,8 @@ function renderDividends(){
   const total=S.dividends.reduce((s,d)=>s+d.amount,0);
   const thisYear=S.dividends.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
+    <div class="summary-card"><div class="s-label">今年の配当</div><div class="s-value sm accent-c">${fmtJP(thisYear)}</div><div class="s-sub">${new Date().getFullYear()}年合計</div></div>
     <div class="summary-card"><div class="s-label">累計受取配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(total)}</div><div class="s-sub">税引後合計</div></div>
-    <div class="summary-card wide"><div class="s-label">今年の配当</div><div class="s-value sm accent-c">${fmtJP(thisYear)}</div><div class="s-sub">${new Date().getFullYear()}年合計</div></div>
   `;
   const tbody=el('dividendsBody');
   if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">💴</div>配当データがありません</div>`;return;}
@@ -1212,6 +1241,17 @@ function renderLineChart() {
       monthlyPnl[ym] = (monthlyPnl[ym] || 0) + (t.realizedPnl || 0);
     }
 
+    // ラベルとymの対応テーブルを構築（プルダウンより先に）
+    const ymList = [];
+    {
+      let c2 = new Date(allYms[0] + '-01');
+      const ed = new Date(endYm + '-01');
+      while (c2 <= ed) {
+        ymList.push(c2.getFullYear() + '-' + String(c2.getMonth()+1).padStart(2,'0'));
+        c2.setMonth(c2.getMonth() + 1);
+      }
+    }
+
     // サマリーバー表示 & プルダウン構築
     const bar = el('pnlSummaryBar'), valEl = el('pnlSummaryValue'), sel = el('pnlMonthSelect');
     if (bar) bar.style.display = '';
@@ -1239,17 +1279,6 @@ function renderLineChart() {
     const gradPnl = ctx.createLinearGradient(0,0,0,210);
     gradPnl.addColorStop(0,'rgba(220,38,38,.2)');
     gradPnl.addColorStop(1,'rgba(220,38,38,.0)');
-
-    // ラベルとymの対応テーブルを保持
-    const ymList = [];
-    {
-      let c2 = new Date(allYms[0] + '-01');
-      const ed = new Date(endYm + '-01');
-      while (c2 <= ed) {
-        ymList.push(c2.getFullYear() + '-' + String(c2.getMonth()+1).padStart(2,'0'));
-        c2.setMonth(c2.getMonth() + 1);
-      }
-    }
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1667,6 +1696,47 @@ function addDividend(){
   // 入力金額は税引後なのでtax=0で保存（二重控除防止）
   S.dividends.push({date,market,ticker,name,amount,tax:0,account,dps:null,qty:null});
   save();closeModal('dividendModal');renderAll();
+}
+
+function toggleIncomeAccordion(){
+  const body=el('incomeAccordionBody');
+  const icon=el('incomeAccordionIcon');
+  const open=body.style.display==='none'||body.style.display==='';
+  body.style.display=open?'block':'none';
+  if(icon)icon.style.transform=open?'rotate(180deg)':'';
+  if(open)renderIncomeAccordionList();
+}
+
+function renderIncomeAccordionList(){
+  if(!S.incomeAssets)S.incomeAssets=[];
+  const wrap=el('incomeAccordionList');
+  if(!wrap)return;
+  if(!S.incomeAssets.length){wrap.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:4px">登録なし</div>';return;}
+  wrap.innerHTML=S.incomeAssets.map((a,i)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:8px">
+      <div>
+        <span style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(29,111,232,.1);color:var(--accent);font-weight:700;margin-right:5px">${a.type}</span>
+        <span style="font-weight:700;font-size:12px">${a.ticker}</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:4px">${a.name}</span>
+      </div>
+      <button onclick="delIncomeAsset(${i});renderIncomeAccordionList()" style="background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:2px 6px">🗑</button>
+    </div>
+  `).join('');
+}
+
+function addIncomeAssetFromMenu(){
+  const ticker=el('menu_ia_ticker').value.toUpperCase().trim();
+  const name=el('menu_ia_name').value.trim();
+  const type=el('menu_ia_type').value;
+  const market=el('menu_ia_market').value;
+  if(!ticker||!name){alert('コードと銘柄名を入力してください');return;}
+  if(!S.incomeAssets)S.incomeAssets=[];
+  if(S.incomeAssets.find(a=>a.ticker===ticker&&a.market===market)){alert('同じコードが既に登録されています');return;}
+  S.incomeAssets.push({ticker,name,type,market,memo:''});
+  save();
+  el('menu_ia_ticker').value='';el('menu_ia_name').value='';
+  renderIncomeAccordionList();
+  renderAll();
 }
 
 function addIncomeAsset(){
