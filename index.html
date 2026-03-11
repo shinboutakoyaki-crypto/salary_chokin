@@ -1309,33 +1309,20 @@ function renderLineChart() {
   } else {
     const acctSel = el('pnlAccountSelect');
 
-    // 動的に証券会社×口座の組み合わせを生成
+    // 証券会社一覧を動的生成
     const sellTrades = [...S.trades].filter(t => t.type==='sell');
-    const comboSet = new Set();
-    sellTrades.forEach(t => {
-      const broker = t.memo || '';
-      const acct = t.account || 'tokutei';
-      const acctLabel = acct==='nisa'?'NISA':acct==='ippan'?'一般':'特定';
-      if (broker) comboSet.add(broker + '|' + acct + '|' + broker + '-' + acctLabel);
-      else comboSet.add('|' + acct + '|' + acctLabel);
-    });
+    const brokerSet = new Set();
+    sellTrades.forEach(t => { if (t.memo) brokerSet.add(t.memo); });
     const currentVal = acctSel ? acctSel.value : 'all';
     if (acctSel) {
       acctSel.innerHTML = '<option value="all">全て</option>'
-        + [...comboSet].sort().map(c => {
-            const [broker, acct, label] = c.split('|');
-            return `<option value="${broker}__${acct}">${label}</option>`;
-          }).join('');
-      // 選択値を保持
+        + [...brokerSet].sort().map(b => `<option value="${b}">${b}</option>`).join('');
       if ([...acctSel.options].some(o => o.value === currentVal)) acctSel.value = currentVal;
     }
     const acctFilter = acctSel ? acctSel.value : 'all';
 
     let trades = sellTrades;
-    if (acctFilter !== 'all') {
-      const [fBroker, fAcct] = acctFilter.split('__');
-      trades = trades.filter(t => (t.memo||'') === fBroker && (t.account||'tokutei') === fAcct);
-    }
+    if (acctFilter !== 'all') trades = trades.filter(t => (t.memo||'') === acctFilter);
     trades.sort((a,b) => new Date(a.date)-new Date(b.date));
     if (!trades.length) {
       ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
