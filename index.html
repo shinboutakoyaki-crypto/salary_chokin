@@ -1069,7 +1069,8 @@ function renderTrades(){
   renderBrokerFilterBar('tradesBrokerFilter', brokers, tradesBrokerFilter, 'setTradesBrokerFilter');
 
   var _sq=el('tradesSearch');var q=_sq?_sq.value.trim().toLowerCase():'';
-  var all=[...S.trades].sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  // 登録順（新しく登録したものが上）＝配列の逆順
+  var all=[...S.trades].reverse();
   if (tradesBrokerFilter !== 'all') all = all.filter(t => t.memo === tradesBrokerFilter);
   var sorted=q?all.filter(function(t){return (t.ticker||'').toLowerCase().indexOf(q)>=0||(t.name||'').toLowerCase().indexOf(q)>=0;}):all;
   const tbody=el('tradesBody');
@@ -1310,25 +1311,57 @@ function renderLineChart() {
     // 評価額合計（取得額＋含み損益）を日次データとして計算
     const h = computeHoldings();
     const totalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
-    const assetData = hist.map(p => totalCost + (p.unrealized||0));
 
-    // Y軸をデータに合わせてタイトに（±5%）
-    const minVal = Math.min(...assetData);
-    const maxVal = Math.max(...assetData);
+    // 月次モード：1日〜末日の全日程をX軸に並べ、データない日はnull
+    let xLabels, assetData, pointRadii, pointBgColors;
+    if (linePeriod === 'monthly' && lineMonth) {
+      const [ly, lm] = lineMonth.split('-').map(Number);
+      const daysInMonth = new Date(ly, lm, 0).getDate();
+      // 日付→評価額マップ
+      const dayMap = {};
+      for (const p of hist) {
+        const d = parseInt(p.date.split('-')[2]);
+        dayMap[d] = totalCost + (p.unrealized||0);
+      }
+      xLabels = [];
+      assetData = [];
+      pointRadii = [];
+      pointBgColors = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        xLabels.push(String(d));
+        const val = dayMap[d] !== undefined ? dayMap[d] : null;
+        assetData.push(val);
+        pointRadii.push(val !== null ? 4 : 0);
+        pointBgColors.push('#1d6fe8');
+      }
+    } else {
+      assetData = hist.map(p => totalCost + (p.unrealized||0));
+      xLabels = hist.map(p => {
+        const [,m,d] = p.date.split('-');
+        return `${parseInt(m)}/${parseInt(d)}`;
+      });
+      pointRadii = 0;
+      pointBgColors = '#dc2626';
+    }
+
+    const allVals = assetData.filter(v => v !== null);
+    const minVal = Math.min(...allVals);
+    const maxVal = Math.max(...allVals);
     const pad = (maxVal - minVal) * 0.08 || maxVal * 0.02;
     const yMin = Math.floor((minVal - pad) / 10000) * 10000;
     const yMax = Math.ceil((maxVal + pad) / 10000) * 10000;
 
-    // X軸ラベル：日次データなので "MM/DD" 形式
-    const xLabels = hist.map(p => {
-      const [,m,d] = p.date.split('-');
-      return `${parseInt(m)}/${parseInt(d)}`;
-    });
-
-    // 赤単色グラデーション
-    const gradRed = ctx.createLinearGradient(0, 0, 0, 220);
-    gradRed.addColorStop(0, 'rgba(220,38,38,.18)');
-    gradRed.addColorStop(1, 'rgba(220,38,38,.0)');
+    // 月次：青グラデーション、それ以外：赤グラデーション
+    const isMonthlyMode = linePeriod === 'monthly';
+    const lineColor = isMonthlyMode ? '#1d6fe8' : '#dc2626';
+    const grad = ctx.createLinearGradient(0, 0, 0, 220);
+    if (isMonthlyMode) {
+      grad.addColorStop(0, 'rgba(29,111,232,.22)');
+      grad.addColorStop(1, 'rgba(29,111,232,.01)');
+    } else {
+      grad.addColorStop(0, 'rgba(220,38,38,.18)');
+      grad.addColorStop(1, 'rgba(220,38,38,.0)');
+    }
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1337,16 +1370,18 @@ function renderLineChart() {
         datasets: [{
           label: '評価額',
           data: assetData,
-          borderColor: '#dc2626',
-          backgroundColor: gradRed,
+          borderColor: lineColor,
+          backgroundColor: grad,
           fill: true,
-          tension: 0,         // シャープ（直線）
-          pointRadius: 0,     // ドットなし
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#dc2626',
+          tension: 0,
+          pointRadius: pointRadii,
+          pointBackgroundColor: pointBgColors,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: lineColor,
           pointHoverBorderColor: '#fff',
           pointHoverBorderWidth: 2,
-          borderWidth: 2
+          borderWidth: isMonthlyMode ? 2.5 : 2,
+          spanGaps: true   // null の日は線でつなぐ
         }]
       },
       options: {
@@ -1355,14 +1390,14 @@ function renderLineChart() {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx2 => '¥' + Math.round(ctx2.raw).toLocaleString()
+              label: ctx2 => ctx2.raw !== null ? '¥' + Math.round(ctx2.raw).toLocaleString() : ''
             }
           }
         },
         scales: {
           x: {
-            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit:6, font:{size:11} },
-            grid: { display:false }
+            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit: isMonthlyMode ? 31 : 6, font:{size: isMonthlyMode ? 10 : 11} },
+            grid: { display: isMonthlyMode, color:'rgba(148,163,184,.08)' }
           },
           y: {
             min: yMin,
@@ -1841,50 +1876,111 @@ function renderStockSummary() {
   rows.sort((a,b) => b.total - a.total);
 
   container.innerHTML = rows.map(r => {
-    const { ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
+    const { k, ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
     const tc = clr(total);
     const uc = clr(unrealized);
     const rc = clr(realized);
     const unrPct = qty > 0 && price && avgCost > 0 ? ((price - avgCost) / avgCost * 100) : null;
+    const safeK = k.replace(/[^a-zA-Z0-9_]/g,'_');
 
-    return `<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">
-        <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden">
-            <span class="ticker ${market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:15px;flex-shrink:0">${ticker}</span>
-            ${broker ? brokerBadge(broker) : ''}
-            <span style="font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name||''}</span>
+    return `<div style="background:var(--bg);border-radius:12px;border:1px solid var(--border);overflow:hidden">
+      <div style="padding:12px 14px;cursor:pointer" onclick="toggleStockHistory('${safeK}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">
+          <div style="min-width:0;flex:1">
+            <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden">
+              <span class="ticker ${market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:15px;flex-shrink:0">${ticker}</span>
+              ${broker ? brokerBadge(broker) : ''}
+              <span style="font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name||''}</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+            ${isIncomeOnly
+              ? `<span class="chip chip-neutral" style="font-size:10px;background:rgba(255,193,7,.15);color:#b8860b">配当のみ</span>`
+              : isHolding
+                ? `<span class="chip chip-up" style="font-size:10px">保有中</span>`
+                : `<span class="chip chip-neutral" style="font-size:10px">売却済</span>`}
+            <span class="mono ${tc}" style="font-size:15px;font-weight:700;white-space:nowrap">${(total>=0?'+':'-')+'¥'+Math.abs(Math.round(total)).toLocaleString()}</span>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
-          ${isIncomeOnly
-            ? `<span class="chip chip-neutral" style="font-size:10px;background:rgba(255,193,7,.15);color:#b8860b">配当のみ</span>`
-            : isHolding
-              ? `<span class="chip chip-up" style="font-size:10px">保有中</span>`
-              : `<span class="chip chip-neutral" style="font-size:10px">売却済</span>`}
-          <span class="mono ${tc}" style="font-size:15px;font-weight:700;white-space:nowrap">${(total>=0?'+':'-')+'¥'+Math.abs(Math.round(total)).toLocaleString()}</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
+            <div class="s-label" style="font-size:10px">含み損益</div>
+            <div class="mono ${uc}" style="font-size:13px;font-weight:600">${isHolding&&!isIncomeOnly?(unrealized>=0?'+':'-')+'¥'+Math.abs(Math.round(unrealized)).toLocaleString():'—'}</div>
+            ${unrPct!==null?`<div style="font-size:10px;color:var(--text3)">${pct(unrPct)}</div>`:''}
+          </div>
+          <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
+            <div class="s-label" style="font-size:10px">実現損益</div>
+            <div class="mono ${rc}" style="font-size:13px;font-weight:600">${realized!==0?(realized>=0?'+':'-')+'¥'+Math.abs(Math.round(realized)).toLocaleString():'—'}</div>
+          </div>
+          <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
+            <div class="s-label" style="font-size:10px">配当</div>
+            <div class="mono" style="font-size:13px;font-weight:600;color:var(--yellow)">${dividend>0?'¥'+Math.round(dividend).toLocaleString():'—'}</div>
+          </div>
         </div>
+        <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text3)" id="stockHistToggleHint_${safeK}">▼ 履歴を見る</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-        <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
-          <div class="s-label" style="font-size:10px">含み損益</div>
-          <div class="mono ${uc}" style="font-size:13px;font-weight:600">${isHolding&&!isIncomeOnly?(unrealized>=0?'+':'-')+'¥'+Math.abs(Math.round(unrealized)).toLocaleString():'—'}</div>
-          ${unrPct!==null?`<div style="font-size:10px;color:var(--text3)">${pct(unrPct)}</div>`:''}
-        </div>
-        <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
-          <div class="s-label" style="font-size:10px">実現損益</div>
-          <div class="mono ${rc}" style="font-size:13px;font-weight:600">${realized!==0?(realized>=0?'+':'-')+'¥'+Math.abs(Math.round(realized)).toLocaleString():'—'}</div>
-        </div>
-        <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
-          <div class="s-label" style="font-size:10px">配当</div>
-          <div class="mono" style="font-size:13px;font-weight:600;color:var(--yellow)">${dividend>0?'¥'+Math.round(dividend).toLocaleString():'—'}</div>
-        </div>
-      </div>
+      <div id="stockHist_${safeK}" style="display:none;border-top:1px solid var(--border);padding:10px 12px;display:none;flex-direction:column;gap:6px"></div>
     </div>`;
   }).join('');
 }
 
 
+function toggleStockHistory(safeK) {
+  const panel = el('stockHist_' + safeK);
+  const hint  = el('stockHistToggleHint_' + safeK);
+  if (!panel) return;
+  const isOpen = panel.style.display === 'flex';
+  if (isOpen) {
+    panel.style.display = 'none';
+    if (hint) hint.textContent = '▼ 履歴を見る';
+    return;
+  }
+  // safeK → 元のpriceKey（JP_7203 形式）を復元
+  const pk = safeK.replace(/__/g, '_'); // 変換: JP_7203__broker → JP_7203 には不要だが念のため
+  // 取引履歴（この銘柄）
+  const trades = S.trades.filter(t => priceKey(t.market, t.ticker).replace(/[^a-zA-Z0-9_]/g,'_') === safeK);
+  // 配当履歴（この銘柄）
+  const divs = S.dividends.filter(d => (d.market+'_'+d.ticker).replace(/[^a-zA-Z0-9_]/g,'_') === safeK);
+
+  // 取引＋配当を日付順（登録順）でまとめる
+  const items = [
+    ...trades.map(t => ({ date: t.date, type: 'trade', data: t })),
+    ...divs.map(d => ({ date: d.date, type: 'div', data: d }))
+  ].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  if (!items.length) {
+    panel.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:6px">履歴がありません</div>';
+  } else {
+    panel.innerHTML = items.map(item => {
+      if (item.type === 'trade') {
+        const t = item.data;
+        const isBuy = t.type === 'buy';
+        const hasPnl = !isBuy && t.realizedPnl !== undefined;
+        return `<div class="trade-card" style="margin:0">
+          <div class="trade-card-top">
+            ${mkChip(isBuy, isBuy?'買':'売')}
+            <span style="font-size:12px;color:var(--text3);margin-left:4px">${t.date}</span>
+            <span class="mono" style="font-size:12px;margin-left:auto">${t.qty}株 @ ${fmtV(t.price,t.market)}</span>
+          </div>
+          ${hasPnl ? `<div class="trade-card-bot"><span style="font-size:11px;color:var(--text3)">実現損益</span><span class="mono ${clr(t.realizedPnl)}" style="font-size:13px;font-weight:700;margin-left:auto">${sign(t.realizedPnl)}${fmtJP(Math.abs(t.realizedPnl))}</span></div>` : ''}
+        </div>`;
+      } else {
+        const d = item.data;
+        return `<div class="trade-card" style="margin:0">
+          <div class="trade-card-top">
+            <span style="font-size:10px;background:rgba(255,193,7,.2);color:#b8860b;border-radius:4px;padding:2px 6px;font-weight:700">配当</span>
+            <span style="font-size:12px;color:var(--text3);margin-left:4px">${d.date}</span>
+            <span class="mono up" style="font-size:13px;font-weight:700;margin-left:auto">${fmtJP(d.amount)}</span>
+          </div>
+        </div>`;
+      }
+    }).join('');
+  }
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  panel.style.gap = '6px';
+  if (hint) hint.textContent = '▲ 閉じる';
+}
 function fmtMan(v){
   if(v>=10000) return (v/10000).toFixed(1)+'万';
   if(v>=1000) return (v/1000).toFixed(1)+'千';
