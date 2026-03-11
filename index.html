@@ -271,12 +271,6 @@ tr:active td{background:rgba(56,189,248,.05);}
         <div class="section-title">保有銘柄</div>
         <span id="holdingsCount" style="font-size:12px;font-weight:700;background:var(--accent);color:#fff;border-radius:20px;padding:2px 9px;line-height:1.6"></span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-outlined btn-sm" onclick="openModal('splitModal')" style="padding:8px 12px;font-size:12px">✂️ 株式分割</button>
-        <button class="add-fab" onclick="openModal('tradeModal')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
-      </div>
     </div>
     <div id="holdingsBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div id="holdingsCards" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -377,6 +371,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button>
+<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('splitModal')"><span style="font-size:18px">✂️</span> 株式分割</button>
 <div style="border-top:1px solid var(--border);margin:4px 0"></div>
 <!-- インカム銘柄アコーディオン -->
 <div style="border:1px solid var(--border2);border-radius:12px;overflow:hidden">
