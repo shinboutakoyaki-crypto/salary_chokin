@@ -426,6 +426,7 @@ tr:active td{background:rgba(56,189,248,.05);}
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" id="broker_rakuten" onclick="selectBroker('楽天証券')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🔴 楽天証券</button>
             <button type="button" id="broker_sbi" onclick="selectBroker('SBI証券')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🔵 SBI証券</button>
+            <button type="button" id="broker_matsui" onclick="selectBroker('松井証券')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🟢 松井証券</button>
             <button type="button" id="broker_other" onclick="selectBroker('')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">— なし</button>
           </div>
         </div>
@@ -467,7 +468,6 @@ tr:active td{background:rgba(56,189,248,.05);}
             <option value="楽天証券">楽天証券</option>
             <option value="SBI証券">SBI証券</option>
             <option value="松井証券">松井証券</option>
-            <option value="マネックス証券">マネックス証券</option>
             <option value="その他">その他</option>
           </select>
         </div>
@@ -905,6 +905,7 @@ function brokerBadge(broker){
   if(!broker)return '';
   if(broker.includes('楽天'))return '<span style="font-size:9px;background:rgba(244,67,54,.25);color:#ef5350;border-radius:4px;padding:2px 5px;flex-shrink:0">楽天</span>';
   if(broker.includes('SBI'))return '<span style="font-size:9px;background:rgba(33,150,243,.2);color:#42a5f5;border-radius:4px;padding:2px 5px;flex-shrink:0">SBI</span>';
+  if(broker.includes('松井'))return '<span style="font-size:9px;background:rgba(0,100,60,.2);color:#006438;border-radius:4px;padding:2px 5px;flex-shrink:0">松井</span>';
   return `<span style="font-size:9px;background:rgba(148,163,184,.15);color:var(--text3);border-radius:4px;padding:2px 5px;flex-shrink:0">${broker}</span>`;
 }
 
@@ -1880,10 +1881,11 @@ function selectAccount(acct){
 }
 function selectBroker(broker){
   _selectedBroker=broker;
-  ['rakuten','sbi','other'].forEach(b=>el('broker_'+b).style.background='');
+  ['rakuten','sbi','matsui','other'].forEach(b=>{const el2=el('broker_'+b);if(el2)el2.style.background='';});
   if(broker==='楽天証券')el('broker_rakuten').style.background='rgba(244,67,54,.25)';
   else if(broker==='SBI証券')el('broker_sbi').style.background='rgba(33,150,243,.25)';
-  else el('broker_other').style.background='rgba(148,163,184,.15)';
+  else if(broker==='松井証券')el('broker_matsui').style.background='rgba(0,100,60,.2)';
+  else { const o=el('broker_other');if(o)o.style.background='rgba(148,163,184,.15)'; }
 }
 let _editTradeIdx = -1; // -1=新規, 0以上=編集中のindex
 
