@@ -271,6 +271,11 @@ tr:active td{background:rgba(56,189,248,.05);}
         <div class="section-title">保有銘柄</div>
         <span id="holdingsCount" style="font-size:12px;font-weight:700;background:var(--accent);color:#fff;border-radius:20px;padding:2px 9px;line-height:1.6"></span>
       </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:1px">評価額合計</div>
+        <div id="holdingsValTotal" style="font-size:18px;font-weight:800;color:var(--accent);font-family:'Barlow','Noto Sans JP',sans-serif;line-height:1">—</div>
+        <div id="holdingsCostTotal" style="font-size:10px;color:var(--text3);margin-top:1px"></div>
+      </div>
     </div>
     <div id="holdingsBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div id="holdingsCards" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -935,8 +940,22 @@ function renderHoldings(){
   const countBadge = el('holdingsCount');
   if (countBadge) countBadge.textContent = keys.length + '銘柄';
 
+  // 評価額合計・取得額合計（フィルター後）
+  let totalVal = 0, totalCostH = 0, hasPrice = false;
+  for (const k of keys) {
+    const hd = h[k], p = S.prices[hd.priceKey] || null;
+    totalCostH += hd.avgCost * hd.qty;
+    if (p) { totalVal += p * hd.qty; hasPrice = true; }
+    else totalVal += hd.avgCost * hd.qty;
+  }
+  const valEl = el('holdingsValTotal'), costEl = el('holdingsCostTotal');
+  if (valEl) valEl.textContent = '¥' + Math.round(totalVal).toLocaleString();
+  if (costEl) costEl.textContent = '取得額 ¥' + Math.round(totalCostH).toLocaleString();
+
   if(!keys.length){
     container.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>銘柄がありません<br><small>+ から取引を入力してください</small></div>`;
+    if (valEl) valEl.textContent = '—';
+    if (costEl) costEl.textContent = '';
     return;
   }
 
