@@ -2898,6 +2898,32 @@ function switchTab(name){
   if(name==='calendar')renderCalendar();
 }
 
+// ===================== SWIPE =====================
+(function(){
+  const TABS = ['dashboard','holdings','trades','dividends','calendar'];
+  var sx=0, sy=0, sTime=0;
+  document.addEventListener('touchstart', function(e){
+    // モーダルが開いているときは無効
+    if(document.querySelector('.modal-overlay.active')) return;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    sTime = Date.now();
+  }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    if(document.querySelector('.modal-overlay.active')) return;
+    var dx = e.changedTouches[0].clientX - sx;
+    var dy = e.changedTouches[0].clientY - sy;
+    var dt = Date.now() - sTime;
+    // 横方向が縦より大きく、50px以上、300ms以内
+    if(Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.2 || dt > 400) return;
+    var cur = document.querySelector('.nav-item.active');
+    if(!cur) return;
+    var idx = TABS.indexOf(cur.dataset.tab);
+    if(dx < 0 && idx < TABS.length-1) switchTab(TABS[idx+1]); // 左スワイプ→次
+    if(dx > 0 && idx > 0) switchTab(TABS[idx-1]);              // 右スワイプ→前
+  }, {passive:true});
+})();
+
 // ===================== CALENDAR =====================
 let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-indexed
