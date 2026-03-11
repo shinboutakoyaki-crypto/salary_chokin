@@ -299,6 +299,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
     </div>
     <div id="divSummary" class="summary-grid"></div>
+    <div id="divBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div id="dividendsBody"></div>
   </div>
 
@@ -460,6 +461,16 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">受取日 *</label><input type="date" id="d_date" class="form-input"></div>
+        <div class="form-group"><label class="form-label">証券会社</label>
+          <select id="d_broker" class="form-select">
+            <option value="">未設定</option>
+            <option value="楽天証券">楽天証券</option>
+            <option value="SBI証券">SBI証券</option>
+            <option value="松井証券">松井証券</option>
+            <option value="マネックス証券">マネックス証券</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
         <div class="form-group"><label class="form-label">口座</label>
           <select id="d_account" class="form-select">
             <option value="tokutei">特定口座</option>
@@ -1111,10 +1122,18 @@ function renderIncomeSection(){
   `;
 }
 
+let divBrokerFilter = 'all';
+function setDivBrokerFilter(b) { divBrokerFilter = b; renderDividends(); }
+
 function renderDividends(){
-  const sorted=[...S.dividends].sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const total=S.dividends.reduce((s,d)=>s+d.amount,0);
-  const thisYear=S.dividends.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
+  // 証券会社フィルターバー
+  const brokers = getBrokers(S.dividends, 'broker');
+  renderBrokerFilterBar('divBrokerFilter', brokers, divBrokerFilter, 'setDivBrokerFilter');
+  const filtered = divBrokerFilter === 'all' ? S.dividends : S.dividends.filter(d => (d.broker||'') === divBrokerFilter);
+
+  const sorted=[...filtered].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const total=filtered.reduce((s,d)=>s+d.amount,0);
+  const thisYear=filtered.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
     <div class="summary-card"><div class="s-label">今年の配当</div><div class="s-value sm accent-c">${fmtJP(thisYear)}</div><div class="s-sub">${new Date().getFullYear()}年合計</div></div>
     <div class="summary-card"><div class="s-label">累計受取配当</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(total)}</div><div class="s-sub">税引後合計</div></div>
@@ -1123,7 +1142,7 @@ function renderDividends(){
   if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">💴</div>配当データがありません</div>`;return;}
   tbody.innerHTML=sorted.map(d=>{
     const idx=S.dividends.indexOf(d);
-    return `<div class="trade-card"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span><button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:13px;font-weight:700">${fmtJP(d.amount)}</span></div></div>`;
+    return `<div class="trade-card"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span>${brokerBadge(d.broker||'')}<button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:13px;font-weight:700">${fmtJP(d.amount)}</span></div></div>`;
   }).join('');
 }
 
@@ -1918,10 +1937,10 @@ function addDividend(){
   const date=v('d_date'),ticker=v('d_ticker').toUpperCase().trim();
   const name=v('d_name').trim(),amount=parseFloat(v('d_amount'));
   const account=v('d_account')||'tokutei';
+  const broker=v('d_broker')||'';
   const market=el('d_market')?v('d_market'):'JP';
   if(!date||!ticker||!amount){alert('必須項目（*）を入力してください');return;}
-  // 入力金額は税引後なのでtax=0で保存（二重控除防止）
-  S.dividends.push({date,market,ticker,name,amount,tax:0,account,dps:null,qty:null});
+  S.dividends.push({date,market,ticker,name,amount,tax:0,account,broker,dps:null,qty:null});
   save();closeModal('dividendModal');renderAll();
 }
 
@@ -2295,7 +2314,7 @@ function parseCsvDivFile(file) {
         // 銘柄コードがない場合（投資信託など）は名前をティッカーとして使用
         const finalTicker = ticker || name.slice(0, 10);
 
-        csvDivData.push({ date, market, ticker: finalTicker, name, amount, tax: parseFloat(taxRate.toFixed(3)), dps, qty, memo: '楽天証券' });
+        csvDivData.push({ date, market, ticker: finalTicker, name, amount, tax: parseFloat(taxRate.toFixed(3)), dps, qty, broker: '楽天証券', account: 'tokutei' });
         ok++;
         html += `<div class="preview-row"><span class="preview-chip">${date}</span><span class="preview-chip">${market}</span><span class="preview-chip">${finalTicker||name.slice(0,8)}</span><span class="preview-chip">¥${amount.toLocaleString()}</span><span class="preview-chip" style="background:rgba(74,222,128,.1);color:var(--green)">税引後¥${net.toLocaleString()}</span></div>`;
       }
