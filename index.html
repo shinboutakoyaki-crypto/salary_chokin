@@ -10,7 +10,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <title>サラリーマンの貯金箱</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 :root {
@@ -31,7 +31,7 @@ body{font-family:'Barlow','Noto Sans JP',sans-serif;background:var(--bg);color:v
 .logo{font-size:16px;font-weight:800;letter-spacing:-0.5px;white-space:nowrap;}
 .logo-p{color:var(--accent);}
 .topbar-right{display:flex;align-items:center;gap:4px;}
-.updated-text{font-size:11px;color:var(--text3);font-family:'Barlow Condensed','Noto Sans JP',sans-serif;}
+.updated-text{font-size:11px;color:var(--text3);font-family:'Barlow','Noto Sans JP',sans-serif;}
 .refresh-btn{background:linear-gradient(135deg,#1d6fe8,#1558c0);color:#fff;border:none;border-radius:20px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;transition:opacity .2s;}
 .refresh-btn:active{opacity:.7;}
 .refresh-btn:disabled{opacity:.5;}
@@ -56,7 +56,7 @@ body{font-family:'Barlow','Noto Sans JP',sans-serif;background:var(--bg);color:v
 .summary-card{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);padding:13px 14px;box-shadow:0 2px 8px rgba(29,111,232,.07);}
 .summary-card.wide{grid-column:1/-1;}
 .s-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
-.s-value{font-size:21px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;letter-spacing:0px;line-height:1;}
+.s-value{font-size:21px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;letter-spacing:0px;line-height:1;}
 .s-value.sm{font-size:16px;}
 .s-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 .up{color:var(--green);}
@@ -70,13 +70,13 @@ th{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;color:var(--t
 td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:active td{background:rgba(56,189,248,.05);}
-.ticker{font-family:'Barlow Condensed','Noto Sans JP',sans-serif;font-weight:600;font-size:13px;}
+.ticker{font-family:'Barlow','Noto Sans JP',sans-serif;font-weight:600;font-size:13px;}
 .ticker-jp{color:var(--red);}
 .ticker-us{color:var(--accent);}
 .badge{display:inline-block;padding:2px 6px;border-radius:20px;font-size:10px;font-weight:700;}
 .badge-jp{background:rgba(248,113,113,.15);color:var(--red);}
 .badge-us{background:rgba(56,189,248,.15);color:var(--accent);}
-.mono{font-family:'Barlow Condensed','Noto Sans JP',sans-serif;font-size:12px;}
+.mono{font-family:'Barlow','Noto Sans JP',sans-serif;font-size:12px;}
 .name-cell{font-size:11px;color:var(--text3);margin-top:2px;}
 
 .btn{border:none;cursor:pointer;border-radius:var(--radius-sm);font-size:14px;font-weight:600;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:opacity .15s,transform .1s;padding:9px 16px;}
@@ -114,9 +114,9 @@ tr:active td{background:rgba(56,189,248,.05);}
 .csv-drop-text{font-size:15px;font-weight:600;color:var(--text2);}
 .csv-drop-sub{font-size:12px;color:var(--text3);margin-top:3px;}
 .csv-hint{background:var(--bg);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);}
-.csv-hint code{font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--accent);background:rgba(56,189,248,.1);padding:2px 5px;border-radius:4px;font-size:11px;}
+.csv-hint code{font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent);background:rgba(56,189,248,.1);padding:2px 5px;border-radius:4px;font-size:11px;}
 .csv-preview{max-height:180px;overflow-y:auto;margin-top:12px;}
-.preview-row{display:flex;gap:6px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;flex-wrap:wrap;align-items:center;}
+.preview-row{display:flex;gap:6px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:'Barlow','Noto Sans JP',sans-serif;flex-wrap:wrap;align-items:center;}
 .preview-row:last-child{border-bottom:none;}
 .preview-chip{background:rgba(56,189,248,.1);color:var(--accent);padding:2px 7px;border-radius:10px;}
 .preview-chip.err{background:rgba(248,113,113,.1);color:var(--red);}
@@ -233,7 +233,7 @@ tr:active td{background:rgba(56,189,248,.05);}
               <option value="all">全て</option>
             </select>
           </div>
-          <span style="font-size:18px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:#dc2626;white-space:nowrap" id="pnlSummaryValue">¥0</span>
+          <span style="font-size:18px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:#dc2626;white-space:nowrap" id="pnlSummaryValue">¥0</span>
         </div>
       </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
@@ -250,7 +250,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       <div id="divYearTotal" style="display:none;padding:8px 16px 0;border-top:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:linear-gradient(135deg,rgba(29,111,232,.07),rgba(29,111,232,.03));border-radius:10px">
           <span style="font-size:12px;font-weight:700;color:var(--text3)" id="divYearTotalLabel">合計受取</span>
-          <span style="font-size:20px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--accent)" id="divYearTotalValue">¥0</span>
+          <span style="font-size:20px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent)" id="divYearTotalValue">¥0</span>
         </div>
       </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="divChart"></canvas></div></div>
@@ -1128,7 +1128,7 @@ function renderIncomeSection(){
               ${a.memo?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${a.memo}</div>`:''}
             </div>
             <div style="text-align:right">
-              <div style="font-size:14px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--yellow)">${total>0?'¥'+Math.round(total).toLocaleString():'—'}</div>
+              <div style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--yellow)">${total>0?'¥'+Math.round(total).toLocaleString():'—'}</div>
               <div style="font-size:10px;color:var(--text3)">累計配当</div>
             </div>
           </div>`;
@@ -1694,7 +1694,7 @@ function renderPnlRanking() {
                 <span style="font-size:11px;color:var(--text3);margin-left:4px">${r.name}</span>
               </div>
               <div style="text-align:right">
-                <span style="font-size:14px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:${color}">${isUp?'+':''}${r.changePct.toFixed(2)}%</span>
+                <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${color}">${isUp?'+':''}${r.changePct.toFixed(2)}%</span>
                 <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.changeAmt).toLocaleString()}</div>
               </div>
             </div>
@@ -1733,7 +1733,7 @@ function renderPnlRanking() {
                 <span style="font-size:11px;color:var(--text3);margin-left:4px">${r.name}</span>
               </div>
               <div style="text-align:right">
-                <span style="font-size:14px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:${color}">${isUp?'+':''}${r.pct.toFixed(2)}%</span>
+                <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${color}">${isUp?'+':''}${r.pct.toFixed(2)}%</span>
                 <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.pnl).toLocaleString()}</div>
               </div>
             </div>
@@ -1767,7 +1767,7 @@ function renderTodayTrades() {
           <span class="ticker ${t.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px;font-weight:700">${t.ticker}</span>
           <span style="font-size:12px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.name||''}</span>
           <span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">${t.qty.toLocaleString()}株</span>
-          <span style="font-size:12px;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--text2);white-space:nowrap">¥${t.price.toLocaleString()}</span>
+          <span style="font-size:12px;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--text2);white-space:nowrap">¥${t.price.toLocaleString()}</span>
         </div>
         <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:${bg};color:${labelColor};flex-shrink:0">${isBuy?'買い':'売り'}</span>
       </div>`;
@@ -2943,15 +2943,15 @@ function renderCalendar() {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
       <div style="text-align:center;padding:10px 0">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">実現損益</div>
-        <div style="font-size:15px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:${totalPnl>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(totalPnl)).toLocaleString()}</div>
+        <div style="font-size:15px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${totalPnl>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(totalPnl)).toLocaleString()}</div>
       </div>
       <div style="text-align:center;padding:10px 0;border-left:1px solid var(--border);border-right:1px solid var(--border)">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">配当金</div>
-        <div style="font-size:15px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--yellow)">¥${Math.round(totalDiv).toLocaleString()}</div>
+        <div style="font-size:15px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--yellow)">¥${Math.round(totalDiv).toLocaleString()}</div>
       </div>
       <div style="text-align:center;padding:10px 0">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">合計</div>
-        <div style="font-size:15px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--accent)">¥${Math.round(totalPnl+totalDiv).toLocaleString()}</div>
+        <div style="font-size:15px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent)">¥${Math.round(totalPnl+totalDiv).toLocaleString()}</div>
       </div>
     </div>
   `;
@@ -2988,7 +2988,7 @@ function calSelectDay(dateStr) {
               <span style="font-size:11px;color:var(--text3);margin-left:5px">${t.name||''}</span>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">売却 ${t.qty}株 @ ¥${t.price.toLocaleString()}</div>
             </div>
-            <span style="font-size:14px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:${(t.realizedPnl||0)>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(t.realizedPnl||0)).toLocaleString()}</span>
+            <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${(t.realizedPnl||0)>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(t.realizedPnl||0)).toLocaleString()}</span>
           </div>`).join('')}
         ${divs.map(d => `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(217,119,6,.06);border-radius:8px">
@@ -2997,12 +2997,12 @@ function calSelectDay(dateStr) {
               <span style="font-size:11px;color:var(--text3);margin-left:5px">${d.name||''}</span>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">配当金</div>
             </div>
-            <span style="font-size:14px;font-weight:700;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--yellow)">¥${Math.round(d.amount).toLocaleString()}</span>
+            <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--yellow)">¥${Math.round(d.amount).toLocaleString()}</span>
           </div>`).join('')}
         ${(sells.length||divs.length)&&(sells.length+divs.length>1)?`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2)">
           <span style="font-size:12px;font-weight:700;color:var(--text2)">合計</span>
-          <span style="font-size:15px;font-weight:800;font-family:'Barlow Condensed','Noto Sans JP',sans-serif;color:var(--accent)">¥${Math.round(pnl+div).toLocaleString()}</span>
+          <span style="font-size:15px;font-weight:800;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent)">¥${Math.round(pnl+div).toLocaleString()}</span>
         </div>`:''}
       </div>
     </div>
