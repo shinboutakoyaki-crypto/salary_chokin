@@ -247,6 +247,10 @@ tr:active td{background:rgba(56,189,248,.05);}
     </div>
     <div class="card">
       <div class="card-header"><span class="card-title">📋 銘柄別損益サマリー</span></div>
+      <div style="padding:10px 12px 0">
+        <input type="text" id="stockSummarySearch" placeholder="🔍 コード・銘柄名で絞り込み" oninput="renderStockSummary()" style="width:100%;padding:8px 12px;font-size:13px;border:1px solid var(--border2);border-radius:10px;background:#f8faff;color:var(--text);box-sizing:border-box">
+      </div>
+      <div id="stockSummaryBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 0"></div>
       <div id="stockSummaryGrid" style="padding:12px;display:flex;flex-direction:column;gap:10px"></div>
     </div>
   </div>
@@ -1689,14 +1693,12 @@ function renderTodayTrades() {
   `;
 }
 
+let stockSummaryBrokerFilter = 'all';
+function setStockSummaryBrokerFilter(b) { stockSummaryBrokerFilter = b; renderStockSummary(); }
+
 function renderStockSummary() {
   const h = computeHoldings();
-  const allKeys = [...new Set(S.trades.map(t => priceKey(t.market,t.ticker)))];
   const container = el('stockSummaryGrid');
-  if (!allKeys.length) {
-    container.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>データがありません</div>';
-    return;
-  }
 
   const divByTicker = {};
   for (const d of S.dividends) {
@@ -1704,53 +1706,122 @@ function renderStockSummary() {
     divByTicker[k] = (divByTicker[k]||0) + d.amount;
   }
 
-  const rows = allKeys.map(k => {
-    // priceKey単位で全holdingを集約
-    const hdList=Object.values(h).filter(x=>x.priceKey===k);
-    const qty=hdList.reduce((s,x)=>s+x.qty,0);
-    const totalCost=hdList.reduce((s,x)=>s+x.avgCost*x.qty,0);
-    const avgCost=qty>0?totalCost/qty:0;
-    const realizedPnl=hdList.reduce((s,x)=>s+x.realizedPnl,0);
-    const firstName=hdList[0]?.name||k.split('_')[1];
-    const firstMarket=hdList[0]?.market||k.split('_')[0];
-    const firstTicker=hdList[0]?.ticker||k.split('_').slice(1).join('_');
-    const hd={ticker:firstTicker,market:firstMarket,name:firstName,qty,avgCost,realizedPnl};
+  // 取引銘柄（broker情報も含める）
+  const tradeKeys = [...new Set(S.trades.map(t => priceKey(t.market,t.ticker)))];
+
+  // インカム銘柄（取引なし・配当のみ）も追加
+  const incomeKeys = [];
+  if (S.incomeAssets && S.incomeAssets.length) {
+    for (const ia of S.incomeAssets) {
+      const k = (ia.market||'JP')+'_'+ia.ticker;
+      if (!tradeKeys.includes(k)) incomeKeys.push(k);
+    }
+  }
+  // 配当のみのデータがある銘柄も追加
+  for (const k of Object.keys(divByTicker)) {
+    if (!tradeKeys.includes(k) && !incomeKeys.includes(k)) incomeKeys.push(k);
+  }
+
+  const allKeys = [...tradeKeys, ...incomeKeys];
+  if (!allKeys.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>データがありません</div>';
+    return;
+  }
+
+  // 各銘柄の証券会社を取引データから取得
+  const brokerByKey = {};
+  for (const t of S.trades) {
+    const k = priceKey(t.market, t.ticker);
+    if (!brokerByKey[k] && t.memo) brokerByKey[k] = t.memo;
+  }
+
+  // 証券会社フィルターバー
+  const allBrokers = [...new Set(Object.values(brokerByKey).filter(Boolean))].sort();
+  renderBrokerFilterBar('stockSummaryBrokerFilter', allBrokers, stockSummaryBrokerFilter, 'setStockSummaryBrokerFilter');
+
+  const searchQ = (el('stockSummarySearch')?.value || '').trim().toLowerCase();
+
+  let rows = allKeys.map(k => {
+    const hdList = Object.values(h).filter(x => x.priceKey === k);
+    const qty = hdList.reduce((s,x) => s+x.qty, 0);
+    const totalCost = hdList.reduce((s,x) => s+x.avgCost*x.qty, 0);
+    const avgCost = qty > 0 ? totalCost/qty : 0;
+    const realizedPnl = hdList.reduce((s,x) => s+x.realizedPnl, 0);
+
+    // 銘柄名はhold→インカム銘柄→分割から取得
+    let firstName = hdList[0]?.name || '';
+    const ticker = hdList[0]?.ticker || k.split('_').slice(1).join('_');
+    const market = hdList[0]?.market || k.split('_')[0];
+    if (!firstName && S.incomeAssets) {
+      const ia = S.incomeAssets.find(a => (a.market||'JP')+'_'+a.ticker === k);
+      if (ia) firstName = ia.name;
+    }
+    if (!firstName) {
+      const dEntry = S.dividends.find(d => d.market+'_'+d.ticker === k);
+      if (dEntry) firstName = dEntry.name || '';
+    }
+
     const price = S.prices[k] || null;
-    const unrealized = hd.qty > 0 && price ? (price - hd.avgCost) * hd.qty : 0;
-    const realized = hd.realizedPnl || 0;
+    const unrealized = qty > 0 && price ? (price - avgCost) * qty : 0;
+    const realized = realizedPnl || 0;
     const dividend = divByTicker[k] || 0;
     const total = unrealized + realized + dividend;
-    const isHolding = hd.qty > 0;
-    return { k, hd, unrealized, realized, dividend, total, isHolding, price };
+    const isHolding = qty > 0;
+    const broker = brokerByKey[k] || '';
+    const isIncomeOnly = incomeKeys.includes(k) && !tradeKeys.includes(k);
+
+    return { k, ticker, market, name: firstName, qty, avgCost, unrealized, realized, dividend, total, isHolding, price, broker, isIncomeOnly };
   });
+
+  // 証券会社フィルター
+  if (stockSummaryBrokerFilter !== 'all') {
+    rows = rows.filter(r => r.broker === stockSummaryBrokerFilter);
+  }
+
+  // 検索フィルター
+  if (searchQ) {
+    rows = rows.filter(r =>
+      r.ticker.toLowerCase().includes(searchQ) ||
+      (r.name||'').toLowerCase().includes(searchQ)
+    );
+  }
+
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>該当する銘柄がありません</div>';
+    return;
+  }
+
   rows.sort((a,b) => b.total - a.total);
 
   container.innerHTML = rows.map(r => {
-    const { hd, unrealized, realized, dividend, total, isHolding, price } = r;
+    const { ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
     const tc = clr(total);
     const uc = clr(unrealized);
     const rc = clr(realized);
-    const unrPct = hd.qty > 0 && price && hd.avgCost > 0 ? ((price - hd.avgCost) / hd.avgCost * 100) : null;
+    const unrPct = qty > 0 && price && avgCost > 0 ? ((price - avgCost) / avgCost * 100) : null;
 
     return `<div style="background:var(--bg);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap">
-            <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:15px;flex-shrink:0">${hd.ticker}</span>
-            <span style="font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hd.name||''}</span>
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow:hidden">
+            <span class="ticker ${market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:15px;flex-shrink:0">${ticker}</span>
+            ${broker ? brokerBadge(broker) : ''}
+            <span style="font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name||''}</span>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
-          ${isHolding
-            ? `<span class="chip chip-up" style="font-size:10px">保有中</span>`
-            : `<span class="chip chip-neutral" style="font-size:10px">売却済</span>`}
+          ${isIncomeOnly
+            ? `<span class="chip chip-neutral" style="font-size:10px;background:rgba(255,193,7,.15);color:#b8860b">配当のみ</span>`
+            : isHolding
+              ? `<span class="chip chip-up" style="font-size:10px">保有中</span>`
+              : `<span class="chip chip-neutral" style="font-size:10px">売却済</span>`}
           <span class="mono ${tc}" style="font-size:15px;font-weight:700;white-space:nowrap">${(total>=0?'+':'-')+'¥'+Math.abs(Math.round(total)).toLocaleString()}</span>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
         <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
           <div class="s-label" style="font-size:10px">含み損益</div>
-          <div class="mono ${uc}" style="font-size:13px;font-weight:600">${isHolding?(unrealized>=0?'+':'-')+'¥'+Math.abs(Math.round(unrealized)).toLocaleString():'—'}</div>
+          <div class="mono ${uc}" style="font-size:13px;font-weight:600">${isHolding&&!isIncomeOnly?(unrealized>=0?'+':'-')+'¥'+Math.abs(Math.round(unrealized)).toLocaleString():'—'}</div>
           ${unrPct!==null?`<div style="font-size:10px;color:var(--text3)">${pct(unrPct)}</div>`:''}
         </div>
         <div style="background:var(--surface);border-radius:8px;padding:8px 10px">
