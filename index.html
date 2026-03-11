@@ -159,11 +159,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 .amounts-hidden .holding-card .up,
 .amounts-hidden .holding-card .down,
 .amounts-hidden .holding-card .neutral,
-.amounts-hidden #summaryGrid .s-value,
-.amounts-hidden #holdingsValTotal,
-.amounts-hidden #holdingsCostTotal,
-.amounts-hidden #holdingsUnrTotal,
-.amounts-hidden #holdingsUnrPct {
+.amounts-hidden #summaryGrid .s-value {
   filter: blur(8px);
   user-select: none;
   transition: filter .2s;
@@ -1796,7 +1792,7 @@ function renderTodayTrades() {
   const todayStr = today();
   const trades = (S.trades||[]).filter(t => t.date === todayStr);
   if (!trades.length) {
-    view.innerHTML = '<div class="empty"><div class="empty-icon">📅</div>今日の取引はありません</div>';
+    const _td = new Date(); const _mo = _td.toLocaleString('en-US',{month:'short'}); const _dy = _td.getDate(); view.innerHTML = `<div class="empty"><div class="empty-icon" style="font-size:0;width:56px;height:56px;border-radius:14px;overflow:hidden;display:inline-flex;flex-direction:column;align-items:center;justify-content:flex-end;border:1.5px solid #e0e0e0;background:#fff;padding-bottom:4px;box-shadow:0 2px 8px rgba(0,0,0,.1)"><span style="font-size:11px;font-weight:700;color:#fff;background:#e53935;width:100%;text-align:center;padding:3px 0;line-height:1.2">${_mo}</span><span style="font-size:22px;font-weight:800;color:#1a1a2e;line-height:1.1;font-family:'Barlow','Noto Sans JP',sans-serif">${_dy}</span></div>今日の取引はありません</div>`;
     return;
   }
   view.innerHTML = `
