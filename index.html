@@ -267,7 +267,10 @@ tr:active td{background:rgba(56,189,248,.05);}
 
   <div id="tab-holdings" class="tab-content">
     <div class="section-header">
-      <div class="section-title">保有銘柄</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="section-title">保有銘柄</div>
+        <span id="holdingsCount" style="font-size:12px;font-weight:700;background:var(--accent);color:#fff;border-radius:20px;padding:2px 9px;line-height:1.6"></span>
+      </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-outlined btn-sm" onclick="openModal('splitModal')" style="padding:8px 12px;font-size:12px">✂️ 株式分割</button>
         <button class="add-fab" onclick="openModal('tradeModal')">
@@ -932,6 +935,10 @@ function renderHoldings(){
   const brokers = getBrokers(keys.map(k=>h[k]), 'broker');
   renderBrokerFilterBar('holdingsBrokerFilter', brokers, holdingsBrokerFilter, 'setHoldingsBrokerFilter');
   if (holdingsBrokerFilter !== 'all') keys = keys.filter(k => h[k].broker === holdingsBrokerFilter);
+
+  // 銘柄数バッジ更新
+  const countBadge = el('holdingsCount');
+  if (countBadge) countBadge.textContent = keys.length + '銘柄';
 
   if(!keys.length){
     container.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>銘柄がありません<br><small>+ から取引を入力してください</small></div>`;
