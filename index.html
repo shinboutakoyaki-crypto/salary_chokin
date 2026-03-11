@@ -293,7 +293,7 @@ tr:active td{background:rgba(56,189,248,.05);}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           CSV読込
         </button>
-        <button class="add-fab" onclick="openModal('dividendModal')" style="width:42px;height:42px">
+        <button class="add-fab" onclick="openDividendModal()" style="width:42px;height:42px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
@@ -451,7 +451,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="modal-overlay" id="dividendModal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-header"><div class="modal-title">配当入力</div><button class="modal-close" onclick="closeModal('dividendModal')">✕</button></div>
+    <div class="modal-header"><div class="modal-title" id="divModalTitle">配当入力</div><button class="modal-close" onclick="closeModal('dividendModal')">✕</button></div>
     <div class="modal-body">
       <div id="ia_quickfill_wrap" style="display:none;margin-bottom:12px">
         <label class="form-label">インカム銘柄から選択</label>
@@ -486,7 +486,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       </div>
       <div class="form-actions">
         <button class="btn btn-ghost" onclick="closeModal('dividendModal')">キャンセル</button>
-        <button class="btn btn-primary" onclick="addDividend()">💾 保存</button>
+        <button class="btn btn-primary" id="divSaveBtn" onclick="addDividend()">💾 保存</button>
       </div>
     </div>
   </div>
@@ -1142,7 +1142,7 @@ function renderDividends(){
   if(!sorted.length){tbody.innerHTML=`<div class="empty"><div class="empty-icon">💴</div>配当データがありません</div>`;return;}
   tbody.innerHTML=sorted.map(d=>{
     const idx=S.dividends.indexOf(d);
-    return `<div class="trade-card"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span>${brokerBadge(d.broker||'')}<button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:13px;font-weight:700">${fmtJP(d.amount)}</span></div></div>`;
+    return `<div class="trade-card" id="divcard_${idx}"><div class="trade-card-top"><span class="ticker ${d.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px">${d.ticker}</span><span style="font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(d.name||'').slice(0,12)+(d.name&&d.name.length>12?'…':'')}</span>${brokerBadge(d.broker||'')}<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;margin-left:6px;background:rgba(29,111,232,.1);color:var(--accent);border:none" onclick="editDiv(${idx})">✏️</button><button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="delDiv(${idx})">🗑</button></div><div class="trade-card-bot"><span style="color:var(--text3);font-size:11px">${d.date}</span><span class="mono up" style="font-size:13px;font-weight:700">${fmtJP(d.amount)}</span></div></div>`;
   }).join('');
 }
 
@@ -1933,6 +1933,40 @@ function addTrade(){
   renderAll();
 }
 
+let _editDivIdx = -1;
+
+function openDividendModal() {
+  _editDivIdx = -1;
+  if(el('divModalTitle')) el('divModalTitle').textContent = '配当入力';
+  if(el('divSaveBtn')) { el('divSaveBtn').textContent = '💾 保存'; }
+  const now = new Date();
+  const yy=now.getFullYear(),mm=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0');
+  el('d_date').value = yy+'-'+mm+'-'+dd;
+  el('d_broker').value = '';
+  el('d_account').value = 'tokutei';
+  el('d_ticker').value = '';
+  el('d_name').value = '';
+  el('d_amount').value = '';
+  updateDivQuickfill();
+  openModal('dividendModal');
+}
+
+function editDiv(idx) {
+  const d = S.dividends[idx];
+  if (!d) return;
+  _editDivIdx = idx;
+  if(el('divModalTitle')) el('divModalTitle').textContent = '配当を編集';
+  if(el('divSaveBtn')) el('divSaveBtn').textContent = '💾 更新';
+  el('d_date').value = d.date || '';
+  el('d_broker').value = d.broker || '';
+  el('d_account').value = d.account || 'tokutei';
+  el('d_ticker').value = d.ticker || '';
+  el('d_name').value = d.name || '';
+  el('d_amount').value = d.amount || '';
+  if(el('ia_quickfill_wrap')) el('ia_quickfill_wrap').style.display = 'none';
+  openModal('dividendModal');
+}
+
 function addDividend(){
   const date=v('d_date'),ticker=v('d_ticker').toUpperCase().trim();
   const name=v('d_name').trim(),amount=parseFloat(v('d_amount'));
@@ -1940,7 +1974,13 @@ function addDividend(){
   const broker=v('d_broker')||'';
   const market=el('d_market')?v('d_market'):'JP';
   if(!date||!ticker||!amount){alert('必須項目（*）を入力してください');return;}
-  S.dividends.push({date,market,ticker,name,amount,tax:0,account,broker,dps:null,qty:null});
+  if (_editDivIdx >= 0) {
+    const orig = S.dividends[_editDivIdx];
+    S.dividends[_editDivIdx] = Object.assign({}, orig, {date, ticker, name, amount, account, broker});
+  } else {
+    S.dividends.push({date,market,ticker,name,amount,tax:0,account,broker,dps:null,qty:null});
+  }
+  _editDivIdx = -1;
   save();closeModal('dividendModal');renderAll();
 }
 
