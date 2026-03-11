@@ -220,10 +220,7 @@ tr:active td{background:rgba(56,189,248,.05);}
           <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
             <select id="pnlMonthSelect" onchange="onPnlMonthChange()" style="padding:4px 8px;font-size:12px;border:1px solid rgba(220,38,38,.25);border-radius:8px;background:#fff;color:var(--text);font-family:inherit"></select>
             <select id="pnlAccountSelect" onchange="onPnlAccountChange()" style="padding:4px 8px;font-size:12px;border:1px solid rgba(220,38,38,.25);border-radius:8px;background:#fff;color:var(--text);font-family:inherit">
-              <option value="all">全口座</option>
-              <option value="tokutei">特定</option>
-              <option value="nisa">NISA</option>
-              <option value="ippan">一般</option>
+              <option value="all">全て</option>
             </select>
           </div>
           <span style="font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:#dc2626;white-space:nowrap" id="pnlSummaryValue">¥0</span>
@@ -1311,9 +1308,34 @@ function renderLineChart() {
 
   } else {
     const acctSel = el('pnlAccountSelect');
+
+    // 動的に証券会社×口座の組み合わせを生成
+    const sellTrades = [...S.trades].filter(t => t.type==='sell');
+    const comboSet = new Set();
+    sellTrades.forEach(t => {
+      const broker = t.memo || '';
+      const acct = t.account || 'tokutei';
+      const acctLabel = acct==='nisa'?'NISA':acct==='ippan'?'一般':'特定';
+      if (broker) comboSet.add(broker + '|' + acct + '|' + broker + '-' + acctLabel);
+      else comboSet.add('|' + acct + '|' + acctLabel);
+    });
+    const currentVal = acctSel ? acctSel.value : 'all';
+    if (acctSel) {
+      acctSel.innerHTML = '<option value="all">全て</option>'
+        + [...comboSet].sort().map(c => {
+            const [broker, acct, label] = c.split('|');
+            return `<option value="${broker}__${acct}">${label}</option>`;
+          }).join('');
+      // 選択値を保持
+      if ([...acctSel.options].some(o => o.value === currentVal)) acctSel.value = currentVal;
+    }
     const acctFilter = acctSel ? acctSel.value : 'all';
-    let trades = [...S.trades].filter(t => t.type==='sell');
-    if (acctFilter !== 'all') trades = trades.filter(t => (t.account||'tokutei') === acctFilter);
+
+    let trades = sellTrades;
+    if (acctFilter !== 'all') {
+      const [fBroker, fAcct] = acctFilter.split('__');
+      trades = trades.filter(t => (t.memo||'') === fBroker && (t.account||'tokutei') === fAcct);
+    }
     trades.sort((a,b) => new Date(a.date)-new Date(b.date));
     if (!trades.length) {
       ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
