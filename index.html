@@ -671,7 +671,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},pnlHistory:[],lastUpdated:null,incomeAssets:[]};
+let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[]};
 let csvImportData=null,csvDivData=null;
 
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
@@ -697,7 +697,9 @@ function fetchPrice(ticker,market){
         if(!d){res(null);return;}
         var meta=d.chart&&d.chart.result&&d.chart.result[0]&&d.chart.result[0].meta;
         var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
-        res(p&&p>0?parseFloat(p):null);
+        var prev=meta?(meta.previousClose||meta.chartPreviousClose):null;
+        if(p&&p>0)res({price:parseFloat(p),prevClose:(prev&&prev>0)?parseFloat(prev):null});
+        else res(null);
       }).catch(function(){clearTimeout(tid);res(null);});
     });
   }
@@ -770,9 +772,12 @@ function refreshPrices(){
       var parts=pk.split('_');
       var market=parts[0];
       var ticker=parts.slice(1).join('_');
-      return fetchPrice(ticker,market).then(function(p){
-        if(p!==null){
-          S.prices[pk]=p;
+      return fetchPrice(ticker,market).then(function(res){
+        if(res!==null){
+          var priceVal = (typeof res==='object') ? res.price : res;
+          var prevVal  = (typeof res==='object') ? res.prevClose : null;
+          S.prices[pk]=priceVal;
+          if(prevVal) { if(!S.prevClose) S.prevClose={}; S.prevClose[pk]=prevVal; }
           done++;
           el('refreshBtn').title=done+'/'+total+'件取得済';
         } else {
@@ -1748,14 +1753,17 @@ function setPieMode(mode) {
 
 // 銘柄の前日比を返す {change, changePct} or null
 function getDodForTicker(priceKey) {
-  if (!S.priceHistory || !S.priceHistory[priceKey]) return null;
-  const arr = [...S.priceHistory[priceKey]].sort((a,b)=>a.date.localeCompare(b.date));
-  const todayStr = today();
-  const todayIdx = arr.findIndex(x=>x.date===todayStr);
-  if (todayIdx < 1) return null;
-  const prev = arr[todayIdx-1].price;
-  const cur  = arr[todayIdx].price;
-  if (!prev || !cur) return null;
+  const cur = S.prices[priceKey];
+  if (!cur) return null;
+  // S.prevClose（当日取得）があれば優先、なければpriceHistoryから前日を探す
+  let prev = S.prevClose && S.prevClose[priceKey] ? S.prevClose[priceKey] : null;
+  if (!prev && S.priceHistory && S.priceHistory[priceKey]) {
+    const arr = [...S.priceHistory[priceKey]].sort((a,b)=>a.date.localeCompare(b.date));
+    const todayStr = today();
+    const todayIdx = arr.findIndex(x=>x.date===todayStr);
+    if (todayIdx >= 1) prev = arr[todayIdx-1].price;
+  }
+  if (!prev) return null;
   return { change: cur - prev, changePct: ((cur - prev) / prev) * 100 };
 }
 
