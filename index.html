@@ -1731,11 +1731,10 @@ function renderPnlRanking() {
     const ranked = keys.map(k => {
       const hd = h[k];
       const dod = getDodForTicker(hd.priceKey);
-      const price = S.prices[hd.priceKey] || hd.avgCost;
-      const changePct = dod ? dod.changePct : 0;
-      const changeAmt = dod ? dod.change * hd.qty : 0;
-      return { ticker: hd.ticker, name: hd.name||'', market: hd.market, changePct, changeAmt, hasDod: !!dod };
-    }).filter(r => r.hasDod).sort((a,b) => b.changePct - a.changePct).slice(0, 5);
+      if (!dod) return null;
+      const changeAmt = dod.change * hd.qty;
+      return { ticker: hd.ticker, name: hd.name||'', market: hd.market, changePct: dod.changePct, changeAmt, hasDod: true };
+    }).filter(r => r !== null).sort((a,b) => b.changePct - a.changePct).slice(0, 5);
 
     if (!ranked.length) {
       view.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>前日比データがありません<div style="font-size:11px;margin-top:4px;color:var(--text3)">毎日更新すると翌日から表示されます</div></div>';
