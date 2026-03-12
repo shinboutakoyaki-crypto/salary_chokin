@@ -2643,6 +2643,8 @@ function parseCsvDivFile(file) {
 
     // 楽天証券配当CSV判定: ヘッダーに「入金日」「配当」が含まれる
     const isRakutenDiv = header.includes('入金日') || header.includes('配当');
+    // SBI証券配当CSV判定: 「受渡日」「受取額(税引後」が含まれる
+    const isSbiDiv = !isRakutenDiv && (header.includes('受渡日') || lines.some(l => l.includes('受渡日') && l.includes('受取額')));
 
     csvDivData = [];
     let ok = 0, err = 0;
@@ -2695,6 +2697,58 @@ function parseCsvDivFile(file) {
         csvDivData.push({ date, market, ticker: finalTicker, name, amount, tax: parseFloat(taxRate.toFixed(3)), dps, qty, broker: '楽天証券', account: 'tokutei' });
         ok++;
         html += `<div class="preview-row"><span class="preview-chip">${date}</span><span class="preview-chip">${market}</span><span class="preview-chip">${finalTicker||name.slice(0,8)}</span><span class="preview-chip">¥${amount.toLocaleString()}</span><span class="preview-chip" style="background:rgba(74,222,128,.1);color:var(--green)">税引後¥${net.toLocaleString()}</span></div>`;
+      }
+    } else if (isSbiDiv) {
+      // SBI証券形式: ヘッダー行を探してデータ行を取得
+      // "受渡日","口座","商品","銘柄名","数量","受取額(税引後・円)"
+      let dataStartIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('受渡日') && lines[i].includes('受取額')) {
+          dataStartIdx = i + 1;
+          break;
+        }
+      }
+      if (dataStartIdx === -1) { el('csvDivPreview').innerHTML = '<div style="color:var(--red);padding:12px">SBI証券CSVの形式が認識できません</div>'; return; }
+
+      const parseRow = line => {
+        const row = []; let cur = '', inQ = false;
+        for (const c of line) {
+          if (c === '"') { inQ = !inQ; }
+          else if (c === ',' && !inQ) { row.push(cur.trim()); cur = ''; }
+          else cur += c;
+        }
+        row.push(cur.trim());
+        return row;
+      };
+
+      const dataLines = lines.slice(dataStartIdx).filter(l => l.trim() && !l.startsWith('"検索') && !l.startsWith('"受渡日') && !l.startsWith('"合計'));
+      for (const line of dataLines) {
+        const row = parseRow(line);
+        if (row.length < 6) { err++; continue; }
+
+        // 受渡日 → date
+        const date = normalizeDate(row[0].replace(/[\"]/g,'').trim());
+        const account = row[1].replace(/[\"]/g,'').trim(); // 口座
+        const productType = row[2].replace(/[\"]/g,'').trim(); // 商品
+        // 銘柄名: "ＮＴＴ 9432" → 名前とコードを分離
+        const meigara = row[3].replace(/[\"]/g,'').trim();
+        const qtyRaw = row[4].replace(/[\"]/g,'').trim();
+        const netRaw = row[5].replace(/[\"]/g,'').trim();
+
+        // 銘柄名からコード抽出（末尾の半角/全角数字4〜5桁）
+        const codeMatch = meigara.match(/(\d{4,5})\s*$/);
+        const ticker = codeMatch ? codeMatch[1] : meigara.slice(0, 10);
+        const name = codeMatch ? meigara.replace(codeMatch[0], '').trim() : meigara;
+
+        const amount = cleanNum(netRaw);
+        const qty = cleanNum(qtyRaw) || null;
+
+        if (!date || !amount || amount <= 0) { err++; continue; }
+
+        const taxRate = 20.315;
+        csvDivData.push({ date, market: 'JP', ticker, name: name || ticker, amount, tax: taxRate, dps: null, qty, broker: 'SBI証券', account: 'tokutei' });
+        ok++;
+        html += `<div class="preview-row"><span class="preview-chip">${date}</span><span class="preview-chip">JP</span><span class="preview-chip">${ticker}</span><span class="preview-chip">${name}</span><span class="preview-chip" style="background:rgba(74,222,128,.1);color:var(--green)">税引後¥${amount.toLocaleString()}</span></div>`;
       }
     } else {
       // 汎用形式フォールバック
