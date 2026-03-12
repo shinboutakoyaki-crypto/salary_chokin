@@ -666,8 +666,9 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div class="modal-header"><div class="modal-title">📂 配当CSV読み込み</div><button class="modal-close" onclick="closeModal('csvDivModal')">✕</button></div>
     <div class="modal-body">
       <div class="csv-hint">
-        <div style="font-weight:700;color:var(--green);margin-bottom:8px">✅ 楽天証券の配当金CSVをそのまま読み込めます！</div>
-        <div>マイページ → 配当金・分配金 → 配当金・分配金履歴 → CSV出力</div>
+        <div style="font-weight:700;color:var(--green);margin-bottom:8px">✅ 楽天証券・SBI証券のCSVをそのまま読み込めます！</div>
+        <div style="margin-bottom:6px">🟠 <b>楽天証券：</b>マイページ → 配当金・分配金 → 配当金・分配金履歴 → CSV出力</div>
+        <div>🔵 <b>SBI証券：</b>口座管理 → 配当金・分配金等 → 期間指定して検索 → CSV出力</div>
       </div>
       <div class="csv-drop" onclick="el('csvDivFile').click()" ondragover="csvDragOver(event)" ondrop="csvDropDiv(event)" ondragleave="this.classList.remove('drag')">
         <div class="csv-drop-icon">📄</div>
