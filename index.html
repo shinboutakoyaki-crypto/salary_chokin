@@ -810,11 +810,11 @@ var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 
 function snapPnl(){
   const h=computeHoldings();
-  let unr=0;
-  for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||0;unr+=(p-hd.avgCost)*hd.qty;}
+  let unr=0, cost=0;
+  for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||0;unr+=(p-hd.avgCost)*hd.qty;cost+=hd.avgCost*hd.qty;}
   const real=S.trades.filter(t=>t.type==='sell').reduce((s,t)=>s+(t.realizedPnl||0),0);
   const today=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
-  const snap={date:today,unrealized:Math.round(unr),realized:Math.round(real)};
+  const snap={date:today,unrealized:Math.round(unr),realized:Math.round(real),totalCost:Math.round(cost)};
   const i=S.pnlHistory.findIndex(p=>p.date===today);
   if(i>=0)S.pnlHistory[i]=snap;else S.pnlHistory.push(snap);
   S.pnlHistory.sort((a,b)=>a.date.localeCompare(b.date));
@@ -900,6 +900,7 @@ var _rendered = {summary:false, holdings:false, trades:false, dividends:false, i
 function renderAll(){
   // 全フラグリセットして再描画が必要な状態に
   _rendered = {summary:false, holdings:false, trades:false, dividends:false, income:false, charts:false};
+  lineMonth = ''; lineYear = ''; // 最新データで再初期化させる
   // ホーム(summary)を最優先で同期描画
   renderSummary(); _rendered.summary = true;
   updateUpdated();
@@ -1036,20 +1037,20 @@ function renderHoldings(){
     const priceDiffStr = priceDiff !== null ? (priceDiff >= 0 ? '+' : '') + priceDiff.toLocaleString() : null;
     return `<div class="holding-card" id="hcard_${k}">
       <div class="holding-card-header" onclick="toggleHoldingCard('${k}')">
-        <!-- 行1: コード バッジ | 右詰め 銘柄名 現在値 (±円) | 損益率% -->
+        <!-- 行1: コード バッジ 銘柄名（左）| 現在値 (±円) 損益率%（右） -->
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0">
-          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-            <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px">${hd.ticker}</span>
+          <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow:hidden">
+            <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px;flex-shrink:0">${hd.ticker}</span>
             ${brokerBadge(hd.broker)}${accountBadge(hd.account)}
-          </div>
-          <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:5px;overflow:hidden">
             <span style="font-size:12px;color:var(--text2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(hd.name||'').slice(0,8)+(hd.name&&hd.name.length>8?'…':'')}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
             ${p
-              ? `<span style="font-size:12px;color:var(--text1);font-weight:700;white-space:nowrap;flex-shrink:0">${fmtV(p,hd.market)}</span>
-                 <span class="${unrColor}" style="font-size:11px;white-space:nowrap;flex-shrink:0">(${priceDiffStr})</span>`
-              : `<span style="color:var(--red);font-size:11px;flex-shrink:0">未取得</span>`
+              ? `<span style="font-size:12px;color:var(--text1);font-weight:700;white-space:nowrap">${fmtV(p,hd.market)}</span>
+                 <span class="${unrColor}" style="font-size:11px;white-space:nowrap">(${priceDiffStr})</span>`
+              : `<span style="color:var(--red);font-size:11px">未取得</span>`
             }
-            <span class="${unrColor}" style="font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0">${unrP!==null?pct(unrP):'—'}</span>
+            <span class="${unrColor}" style="font-size:12px;font-weight:700;white-space:nowrap">${unrP!==null?pct(unrP):'—'}</span>
           </div>
         </div>
         <!-- 行2: 取得単価 | 含み損益 ±円 (%) -->
@@ -1296,9 +1297,8 @@ let divMode='monthly'; // 'monthly' or 'cumulative'
 let divYear=new Date().getFullYear();
 
 let linePeriod = 'monthly';
-let lineMonth = ''; // "2025-01" 形式、月次モード用
-
-let lineYear = ''; // "2025" 形式、年間モード用
+let lineMonth = ''; // renderLineChart内で初期化
+let lineYear = ''; // renderLineChart内で初期化
 
 function setLinePeriod(p) {
   linePeriod = p;
@@ -1378,22 +1378,16 @@ function fmtMan2(v) {
 }
 
 function renderLineChart() {
-  // lineMonth/lineYear が未初期化なら最新データ月で初期化（なければ現在）
+  // lineMonth/lineYear が未初期化なら最新データ月で初期化
   if (!lineMonth) {
-    if (S.pnlHistory && S.pnlHistory.length) {
-      const latest = S.pnlHistory[S.pnlHistory.length - 1].date;
-      lineMonth = latest.slice(0, 7); // "YYYY-MM"
-    } else {
-      const now = new Date();
-      lineMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-    }
+    const sorted = (S.pnlHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+    lineMonth = sorted.length ? sorted[sorted.length-1].date.slice(0,7)
+      : (()=>{const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');})();
   }
   if (!lineYear) {
-    if (S.pnlHistory && S.pnlHistory.length) {
-      lineYear = S.pnlHistory[S.pnlHistory.length - 1].date.slice(0, 4);
-    } else {
-      lineYear = String(new Date().getFullYear());
-    }
+    const sorted = (S.pnlHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+    lineYear = sorted.length ? sorted[sorted.length-1].date.slice(0,4)
+      : String(new Date().getFullYear());
   }
   // ナビバーの表示状態を確実に同期
   const monthNav = el('monthlyNavBar');
@@ -1435,7 +1429,9 @@ function renderLineChart() {
 
     // 評価額合計（取得額＋含み損益）を計算
     const h = computeHoldings();
-    const totalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
+    const currentTotalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
+    // 評価額 = その日の取得額合計 + 含み損益（取得額はスナップに保存済み、なければ現在値で代替）
+    const evalOf = (snap) => (snap.totalCost !== undefined ? snap.totalCost : currentTotalCost) + (snap.unrealized||0);
 
     let xLabels, assetData, pointRadii, pointBgColors;
 
@@ -1446,7 +1442,7 @@ function renderLineChart() {
       const dayMap = {};
       S.pnlHistory.filter(p => p.date && p.date.startsWith(lineMonth)).forEach(p => {
         const d = parseInt(p.date.split('-')[2]);
-        dayMap[d] = totalCost + (p.unrealized||0);
+        dayMap[d] = evalOf(p);
       });
       xLabels = []; assetData = []; pointRadii = []; pointBgColors = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -1465,7 +1461,7 @@ function renderLineChart() {
         const mData = S.pnlHistory.filter(p => p.date && p.date.startsWith(mStr));
         if (mData.length) {
           const last = mData.sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0];
-          assetData.push(totalCost + (last.unrealized||0));
+          assetData.push(evalOf(last));
           pointRadii.push(5);
         } else {
           assetData.push(null);
@@ -1483,7 +1479,7 @@ function renderLineChart() {
       }
       const years = Object.keys(yearMap).sort();
       xLabels = years.map(y => y + '年');
-      assetData = years.map(y => totalCost + (yearMap[y].unrealized||0));
+      assetData = years.map(y => evalOf(yearMap[y]));
       pointRadii = assetData.map(() => 5);
       pointBgColors = assetData.map(() => '#dc2626');
     }
