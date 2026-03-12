@@ -1355,6 +1355,24 @@ function fmtMan2(v) {
 }
 
 function renderLineChart() {
+  // lineMonth/lineYear が未初期化なら現在日時で初期化
+  if (!lineMonth) {
+    const now = new Date();
+    lineMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  }
+  if (!lineYear) {
+    lineYear = String(new Date().getFullYear());
+  }
+  // ナビバーの表示状態を確実に同期
+  const monthNav = el('monthlyNavBar');
+  const yearNav  = el('yearlyNavBar');
+  if (monthNav) monthNav.style.display = linePeriod === 'monthly' ? '' : 'none';
+  if (yearNav)  yearNav.style.display  = linePeriod === 'yearly'  ? '' : 'none';
+  // ボタンのハイライトも同期
+  ['monthly','yearly','all'].forEach(k => {
+    const b = el('linePeriod_'+k);
+    if (b) { b.className = 'btn btn-sm ' + (k===linePeriod?'btn-primary':'btn-ghost'); b.style.cssText='padding:3px 10px;font-size:11px'; }
+  });
   killChart('line');
   const canvas = el('lineChart');
   const ctx = canvas.getContext('2d');
@@ -1373,91 +1391,82 @@ function renderLineChart() {
   if (assetMode === 'asset') {
     const bar = el('pnlSummaryBar'); if (bar) bar.style.display = 'none';
 
-    // 月次・年間モードの場合は対象期間のデータに絞る
-    let hist = filterByPeriod(S.pnlHistory, 'date');
-    if (linePeriod === 'monthly' && lineMonth) {
-      hist = S.pnlHistory.filter(p => p.date && p.date.startsWith(lineMonth));
+    // ラベル更新
+    if (linePeriod === 'monthly') {
       const lbl = el('lineMonthLabel');
-      if (lbl) {
-        const [y, m] = lineMonth.split('-');
-        lbl.textContent = y + '/' + parseInt(m) + '月';
-      }
+      if (lbl) { const [y,m] = lineMonth.split('-'); lbl.textContent = y+'/'+parseInt(m)+'月'; }
     }
-    if (linePeriod === 'yearly' && lineYear) {
-      hist = S.pnlHistory.filter(p => p.date && p.date.startsWith(lineYear));
+    if (linePeriod === 'yearly') {
       const lbl = el('lineYearLabel');
       if (lbl) lbl.textContent = lineYear + '年';
     }
 
-    if (!hist.length) {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '13px Outfit';
-      ctx.textAlign = 'center';
-      const msg = linePeriod==='monthly' ? 'この月のデータがありません'
-                : linePeriod==='yearly'  ? 'この年のデータがありません'
-                : '「更新」を押すとデータが蓄積されます';
-      ctx.fillText(msg, canvas.width/2, canvas.height/2);
-      return;
-    }
-
-    // 評価額合計（取得額＋含み損益）を日次データとして計算
+    // 評価額合計（取得額＋含み損益）を計算
     const h = computeHoldings();
     const totalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
 
-    // 月次モード：1日〜末日の全日程をX軸に並べ、データない日はnull
-    // 年間モード：1月〜12月の月ごとに集計（月末最終値）
     let xLabels, assetData, pointRadii, pointBgColors;
-    if (linePeriod === 'yearly' && lineYear) {
+
+    if (linePeriod === 'monthly') {
+      // 月次：1日〜末日をX軸、データない日はnull
+      const [ly, lm] = lineMonth.split('-').map(Number);
+      const daysInMonth = new Date(ly, lm, 0).getDate();
+      const dayMap = {};
+      S.pnlHistory.filter(p => p.date && p.date.startsWith(lineMonth)).forEach(p => {
+        const d = parseInt(p.date.split('-')[2]);
+        dayMap[d] = totalCost + (p.unrealized||0);
+      });
+      xLabels = []; assetData = []; pointRadii = []; pointBgColors = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        xLabels.push(String(d));
+        const val = dayMap[d] !== undefined ? dayMap[d] : null;
+        assetData.push(val);
+        pointRadii.push(val !== null ? 5 : 0);
+        pointBgColors.push('#1d6fe8');
+      }
+    } else if (linePeriod === 'yearly') {
+      // 年間：1月〜12月をX軸、各月の月末値
       const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-      xLabels = months;
-      assetData = [];
-      pointRadii = [];
-      pointBgColors = [];
+      xLabels = months; assetData = []; pointRadii = []; pointBgColors = [];
       for (let m = 1; m <= 12; m++) {
         const mStr = lineYear + '-' + String(m).padStart(2,'0');
-        const monthData = S.pnlHistory.filter(p => p.date && p.date.startsWith(mStr));
-        if (monthData.length) {
-          // 月の最終データを採用
-          const last = monthData.sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0];
+        const mData = S.pnlHistory.filter(p => p.date && p.date.startsWith(mStr));
+        if (mData.length) {
+          const last = mData.sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0];
           assetData.push(totalCost + (last.unrealized||0));
-          pointRadii.push(4);
+          pointRadii.push(5);
         } else {
           assetData.push(null);
           pointRadii.push(0);
         }
         pointBgColors.push('#1d6fe8');
       }
-    } else if (linePeriod === 'monthly' && lineMonth) {
-      const [ly, lm] = lineMonth.split('-').map(Number);
-      const daysInMonth = new Date(ly, lm, 0).getDate();
-      // 日付→評価額マップ
-      const dayMap = {};
-      for (const p of hist) {
-        const d = parseInt(p.date.split('-')[2]);
-        dayMap[d] = totalCost + (p.unrealized||0);
-      }
-      xLabels = [];
-      assetData = [];
-      pointRadii = [];
-      pointBgColors = [];
-      for (let d = 1; d <= daysInMonth; d++) {
-        xLabels.push(String(d));
-        const val = dayMap[d] !== undefined ? dayMap[d] : null;
-        assetData.push(val);
-        pointRadii.push(val !== null ? 4 : 0);
-        pointBgColors.push('#1d6fe8');
-      }
     } else {
-      assetData = hist.map(p => totalCost + (p.unrealized||0));
-      xLabels = hist.map(p => {
-        const [,m,d] = p.date.split('-');
-        return `${parseInt(m)}/${parseInt(d)}`;
-      });
-      pointRadii = 0;
-      pointBgColors = '#dc2626';
+      // 全期間：年ごとの最終評価額
+      const yearMap = {};
+      for (const p of S.pnlHistory) {
+        if (!p.date) continue;
+        const y = p.date.split('-')[0];
+        if (!yearMap[y] || p.date > yearMap[y].date) yearMap[y] = p;
+      }
+      const years = Object.keys(yearMap).sort();
+      xLabels = years.map(y => y + '年');
+      assetData = years.map(y => totalCost + (yearMap[y].unrealized||0));
+      pointRadii = assetData.map(() => 5);
+      pointBgColors = assetData.map(() => '#dc2626');
     }
 
+    // データが全部nullまたは空のときは空メッセージ
+    const hasData = assetData.some(v => v !== null);
+    if (!hasData) {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
+      const msg = linePeriod==='monthly' ? 'この月のデータがありません'
+                : linePeriod==='yearly'  ? 'この年のデータがありません'
+                : '「更新」を押すとデータが蓄積されます';
+      ctx.fillText(msg, canvas.width/2, canvas.height/2);
+      return;
+    }
     const allVals = assetData.filter(v => v !== null);
     const minVal = Math.min(...allVals);
     const maxVal = Math.max(...allVals);
