@@ -390,7 +390,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button>
-<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('splitModal')"><span style="font-size:18px">✂️</span> 株式分割</button>
+<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openSplitModal()"><span style="font-size:18px">✂️</span> 株式分割</button>
 <div style="border-top:1px solid var(--border);margin:4px 0"></div>
 <!-- インカム銘柄アコーディオン -->
 <div style="border:1px solid var(--border2);border-radius:12px;overflow:hidden">
@@ -586,40 +586,24 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div class="modal-handle"></div>
     <div class="modal-header"><div class="modal-title">✂️ 株式分割の適用</div><button class="modal-close" onclick="closeModal('splitModal')">✕</button></div>
     <div class="modal-body">
-      <div class="csv-hint" style="margin-bottom:12px">
-        <div style="font-weight:700;color:var(--green);margin-bottom:6px">⚡ よく使う分割をワンタップ適用</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <button class="btn btn-outlined btn-sm" onclick="quickSplit('9434','JP',10)" style="flex-direction:column;padding:10px 6px;gap:2px;font-size:12px">
-            ソフトバンク 9434<span style="font-size:10px;color:var(--text3)">1→10分割 (2024/10)</span>
-          </button>
-          <button class="btn btn-outlined btn-sm" onclick="quickSplit('8473','JP',2)" style="flex-direction:column;padding:10px 6px;gap:2px;font-size:12px">
-            SBI HD 8473<span style="font-size:10px;color:var(--text3)">1→2分割 (2025/12)</span>
-          </button>
-          <button class="btn btn-outlined btn-sm" onclick="quickSplit('5401','JP',5)" style="flex-direction:column;padding:10px 6px;gap:2px;font-size:12px">
-            日本製鉄 5401<span style="font-size:10px;color:var(--text3)">1→5分割 (2025/10)</span>
-          </button>
-        </div>
+      <div class="form-group">
+        <label class="form-label">証券口座</label>
+        <select id="split_broker" class="form-input" onchange="updateSplitTickers()">
+          <option value="">-- 口座を選択 --</option>
+        </select>
       </div>
-      <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:12px">
-        <div style="font-weight:600;color:var(--text2);margin-bottom:10px">手動で入力</div>
-        <div class="form-group">
-          <label class="form-label">市場</label>
-          <select id="split_market" class="form-input">
-            <option value="JP">JP（国内株）</option>
-            <option value="US">US（米国株）</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">証券コード / ティッカー</label>
-          <input id="split_ticker" class="form-input" type="text" placeholder="例: 9434" oninput="previewSplit()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">分割比率（何倍になるか）</label>
-          <input id="split_ratio" class="form-input" type="number" placeholder="例: 10（1→10分割なら10）" min="0.01" step="0.01" oninput="previewSplit()">
-        </div>
-        <div id="splitPreview" style="display:none;background:var(--surface);border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:var(--text2)"></div>
+      <div class="form-group">
+        <label class="form-label">銘柄</label>
+        <select id="split_ticker_sel" class="form-input" onchange="previewSplit()">
+          <option value="">-- 口座を先に選択 --</option>
+        </select>
       </div>
-      <div class="form-actions">
+      <div class="form-group">
+        <label class="form-label">分割比率（何倍になるか）</label>
+        <input id="split_ratio" class="form-input" type="number" placeholder="例: 10（1→10分割なら10）" min="0.01" step="0.01" oninput="previewSplit()">
+      </div>
+      <div id="splitPreview" style="display:none;background:var(--bg);border-radius:8px;padding:12px;margin-top:4px;font-size:13px;color:var(--text2)"></div>
+      <div class="form-actions" style="margin-top:16px">
         <button class="btn btn-ghost" onclick="closeModal('splitModal')">キャンセル</button>
         <button class="btn btn-primary" onclick="applySplit()">✅ 適用する</button>
       </div>
@@ -2856,40 +2840,62 @@ function previewSplit() {
   `;
 }
 
-function applySplit() {
-  const ticker = el('split_ticker').value.trim().toUpperCase();
-  const market = el('split_market').value;
-  const ratio = parseFloat(el('split_ratio').value);
-  if (!ticker || !ratio || ratio <= 0) { alert('証券コードと分割比率を入力してください'); return; }
+function openSplitModal() {
   const h = computeHoldings();
-  const key = market + '_' + ticker;
-  const hd = h[key];
+  const brokers = [...new Set(Object.values(h).filter(hd=>hd.qty>0).map(hd=>hd.broker||'未設定'))].sort();
+  const brokerSel = el('split_broker');
+  brokerSel.innerHTML = '<option value="">-- 口座を選択 --</option>' +
+    brokers.map(b=>`<option value="${b}">${b}</option>`).join('');
+  el('split_ticker_sel').innerHTML = '<option value="">-- 口座を先に選択 --</option>';
+  el('split_ratio').value = '';
+  el('splitPreview').style.display = 'none';
+  openModal('splitModal');
+}
+
+function updateSplitTickers() {
+  const broker = el('split_broker').value;
+  const h = computeHoldings();
+  const sel = el('split_ticker_sel');
+  if (!broker) { sel.innerHTML = '<option value="">-- 口座を先に選択 --</option>'; return; }
+  const tickers = Object.values(h)
+    .filter(hd => hd.qty > 0 && (hd.broker||'未設定') === broker)
+    .sort((a,b) => a.ticker.localeCompare(b.ticker));
+  sel.innerHTML = '<option value="">-- 銘柄を選択 --</option>' +
+    tickers.map(hd => `<option value="${hd.market}_${hd.ticker}">${hd.ticker}（${hd.name||hd.ticker}）</option>`).join('');
+  el('splitPreview').style.display = 'none';
+}
+
+function previewSplit() {
+  const val = el('split_ticker_sel').value;
+  const ratio = parseFloat(el('split_ratio').value);
+  const prev = el('splitPreview');
+  if (!val || !ratio || ratio <= 0) { prev.style.display='none'; return; }
+  const h = computeHoldings();
+  const hd = h[val];
+  if (!hd) { prev.style.display='none'; return; }
+  prev.style.display = 'block';
+  prev.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">株数</span><span>${hd.qty} → <b>${Math.round(hd.qty*ratio)}</b>株</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">取得単価</span><span>¥${hd.avgCost.toFixed(1)} → <b>¥${(hd.avgCost/ratio).toFixed(1)}</b></span></div>`;
+}
+
+function applySplit() {
+  const val = el('split_ticker_sel').value;
+  const ratio = parseFloat(el('split_ratio').value);
+  if (!val || !ratio || ratio <= 0) { alert('銘柄と分割比率を選択・入力してください'); return; }
+  const [market, ticker] = val.split('_');
+  const h = computeHoldings();
+  const hd = h[val];
   if (!hd || hd.qty === 0) { alert(`「${ticker}」の保有データが見つかりません`); return; }
   const newQty = Math.round(hd.qty * ratio);
   const newPrice = hd.avgCost / ratio;
-  if (!confirm(`${ticker} に${ratio}分割を適用します。
-
-株数: ${hd.qty} → ${newQty}株
-単価: ¥${hd.avgCost.toFixed(1)} → ¥${newPrice.toFixed(1)}
-
-取引履歴が更新されます。よろしいですか？`)) return;
-
-  // 取引履歴の該当銘柄を全件更新
+  if (!confirm(`${ticker}（${hd.name||ticker}）に${ratio}分割を適用します。\n\n株数: ${hd.qty} → ${newQty}株\n単価: ¥${hd.avgCost.toFixed(1)} → ¥${newPrice.toFixed(1)}\n\n取引履歴が更新されます。よろしいですか？`)) return;
   let count = 0;
   S.trades = S.trades.map(t => {
     if (t.ticker.toUpperCase() === ticker && t.market === market) {
-      count++;
-      return { ...t, qty: t.qty * ratio, price: t.price / ratio };
+      count++; return { ...t, qty: t.qty * ratio, price: t.price / ratio };
     }
     return t;
   });
-
-  save();
-  renderAll();
-  closeModal('splitModal');
-  el('split_ticker').value = '';
-  el('split_ratio').value = '';
-  el('splitPreview').style.display = 'none';
+  save(); renderAll(); closeModal('splitModal');
   alert(`✅ ${ticker} の株式分割（${ratio}分割）を${count}件の取引に適用しました！`);
 }
 
