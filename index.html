@@ -210,12 +210,11 @@ tr:active td{background:rgba(56,189,248,.05);}
           <button id="assetToggle_pnl" class="btn btn-sm btn-ghost" onclick="setAssetMode('pnl')" style="padding:4px 10px;font-size:11px">実損益</button>
         </div>
       </div>
-      <!-- 総資産モード：期間ボタン or 月次ビュー切替 -->
+      <!-- 総資産モード：期間ボタン or 月次/年間ビュー切替 -->
       <div style="padding:8px 16px 0;display:flex;gap:6px;align-items:center" id="linePeriodBtns">
-        <button class="btn btn-sm btn-primary" id="linePeriod_1m" onclick="setLinePeriod('1m')" style="padding:3px 10px;font-size:11px">1ヶ月</button>
-        <button class="btn btn-sm btn-ghost" id="linePeriod_3m" onclick="setLinePeriod('3m')" style="padding:3px 10px;font-size:11px">3ヶ月</button>
+        <button class="btn btn-sm btn-primary" id="linePeriod_monthly" onclick="setLinePeriod('monthly')" style="padding:3px 10px;font-size:11px">月次</button>
+        <button class="btn btn-sm btn-ghost" id="linePeriod_yearly" onclick="setLinePeriod('yearly')" style="padding:3px 10px;font-size:11px">年間</button>
         <button class="btn btn-sm btn-ghost" id="linePeriod_all" onclick="setLinePeriod('all')" style="padding:3px 10px;font-size:11px">全期間</button>
-        <button class="btn btn-sm btn-ghost" id="linePeriod_monthly" onclick="setLinePeriod('monthly')" style="padding:3px 10px;font-size:11px">月次</button>
       </div>
       <!-- 月次ビュー：月ナビゲーター -->
       <div id="monthlyNavBar" style="display:none;padding:8px 16px 0">
@@ -223,6 +222,14 @@ tr:active td{background:rgba(56,189,248,.05);}
           <button onclick="shiftLineMonth(-1)" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:0 6px">‹</button>
           <span id="lineMonthLabel" style="font-weight:700;font-size:15px;color:var(--text)">2025/01</span>
           <button onclick="shiftLineMonth(1)" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:0 6px">›</button>
+        </div>
+      </div>
+      <!-- 年間ビュー：年ナビゲーター -->
+      <div id="yearlyNavBar" style="display:none;padding:8px 16px 0">
+        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(29,111,232,.06);border-radius:10px;padding:7px 12px;border:1px solid rgba(29,111,232,.12)">
+          <button onclick="shiftLineYear(-1)" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:0 6px">‹</button>
+          <span id="lineYearLabel" style="font-weight:700;font-size:15px;color:var(--text)">2025年</span>
+          <button onclick="shiftLineYear(1)" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:0 6px">›</button>
         </div>
       </div>
       <div id="pnlSummaryBar" style="display:none;padding:8px 16px 0">
@@ -1265,22 +1272,36 @@ let assetMode='asset'; // 'asset' or 'pnl'
 let divMode='monthly'; // 'monthly' or 'cumulative'
 let divYear=new Date().getFullYear();
 
-let linePeriod = '1m';
+let linePeriod = 'monthly';
 let lineMonth = ''; // "2025-01" 形式、月次モード用
+
+let lineYear = ''; // "2025" 形式、年間モード用
 
 function setLinePeriod(p) {
   linePeriod = p;
-  ['1m','3m','all','monthly'].forEach(k => {
+  ['monthly','yearly','all'].forEach(k => {
     const b = el('linePeriod_'+k);
     if (b) { b.className = 'btn btn-sm ' + (k===p?'btn-primary':'btn-ghost'); b.style.cssText='padding:3px 10px;font-size:11px'; }
   });
   const isMonthly = p === 'monthly';
-  const nav = el('monthlyNavBar');
-  if (nav) nav.style.display = isMonthly ? '' : 'none';
+  const isYearly  = p === 'yearly';
+  const monthNav = el('monthlyNavBar');
+  const yearNav  = el('yearlyNavBar');
+  if (monthNav) monthNav.style.display = isMonthly ? '' : 'none';
+  if (yearNav)  yearNav.style.display  = isYearly  ? '' : 'none';
   if (isMonthly && !lineMonth) {
     const now = new Date();
     lineMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   }
+  if (isYearly && !lineYear) {
+    lineYear = String(new Date().getFullYear());
+  }
+  renderLineChart();
+}
+
+function shiftLineYear(delta) {
+  if (!lineYear) return;
+  lineYear = String(parseInt(lineYear) + delta);
   renderLineChart();
 }
 
@@ -1301,21 +1322,21 @@ function setAssetMode(mode) {
   // 期間ボタン：実損益は非表示
   const pb = el('linePeriodBtns');
   if (pb) pb.style.display = mode==='asset' ? '' : 'none';
-  // 月次ナビ・リストも実損益では非表示
+  // 月次・年間ナビ・リストも実損益では非表示
   if (mode !== 'asset') {
     const nav = el('monthlyNavBar'); if (nav) nav.style.display = 'none';
+    const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = 'none';
   } else if (linePeriod === 'monthly') {
     const nav = el('monthlyNavBar'); if (nav) nav.style.display = '';
+  } else if (linePeriod === 'yearly') {
+    const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = '';
   }
   renderLineChart();
 }
 
 function filterByPeriod(arr, dateKey) {
-  if (linePeriod === 'all' || linePeriod === 'monthly') return arr;
-  const now = new Date();
-  const days = linePeriod === '1m' ? 30 : 90;
-  const cutoff = new Date(now - days * 86400000);
-  return arr.filter(d => new Date(d[dateKey]) >= cutoff);
+  if (linePeriod === 'all' || linePeriod === 'monthly' || linePeriod === 'yearly') return arr;
+  return arr;
 }
 
 function makeGradient(ctx, color) {
@@ -1352,7 +1373,7 @@ function renderLineChart() {
   if (assetMode === 'asset') {
     const bar = el('pnlSummaryBar'); if (bar) bar.style.display = 'none';
 
-    // 月次モードの場合は対象月のデータに絞る
+    // 月次・年間モードの場合は対象期間のデータに絞る
     let hist = filterByPeriod(S.pnlHistory, 'date');
     if (linePeriod === 'monthly' && lineMonth) {
       hist = S.pnlHistory.filter(p => p.date && p.date.startsWith(lineMonth));
@@ -1362,14 +1383,21 @@ function renderLineChart() {
         lbl.textContent = y + '/' + parseInt(m) + '月';
       }
     }
+    if (linePeriod === 'yearly' && lineYear) {
+      hist = S.pnlHistory.filter(p => p.date && p.date.startsWith(lineYear));
+      const lbl = el('lineYearLabel');
+      if (lbl) lbl.textContent = lineYear + '年';
+    }
 
     if (!hist.length) {
       ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.fillStyle = '#94a3b8';
       ctx.font = '13px Outfit';
       ctx.textAlign = 'center';
-      ctx.fillText(linePeriod==='monthly'?'この月のデータがありません':'「更新」を押すとデータが蓄積されます', canvas.width/2, canvas.height/2);
-      // 日付リストも空に
+      const msg = linePeriod==='monthly' ? 'この月のデータがありません'
+                : linePeriod==='yearly'  ? 'この年のデータがありません'
+                : '「更新」を押すとデータが蓄積されます';
+      ctx.fillText(msg, canvas.width/2, canvas.height/2);
       return;
     }
 
@@ -1378,8 +1406,29 @@ function renderLineChart() {
     const totalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
 
     // 月次モード：1日〜末日の全日程をX軸に並べ、データない日はnull
+    // 年間モード：1月〜12月の月ごとに集計（月末最終値）
     let xLabels, assetData, pointRadii, pointBgColors;
-    if (linePeriod === 'monthly' && lineMonth) {
+    if (linePeriod === 'yearly' && lineYear) {
+      const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+      xLabels = months;
+      assetData = [];
+      pointRadii = [];
+      pointBgColors = [];
+      for (let m = 1; m <= 12; m++) {
+        const mStr = lineYear + '-' + String(m).padStart(2,'0');
+        const monthData = S.pnlHistory.filter(p => p.date && p.date.startsWith(mStr));
+        if (monthData.length) {
+          // 月の最終データを採用
+          const last = monthData.sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0];
+          assetData.push(totalCost + (last.unrealized||0));
+          pointRadii.push(4);
+        } else {
+          assetData.push(null);
+          pointRadii.push(0);
+        }
+        pointBgColors.push('#1d6fe8');
+      }
+    } else if (linePeriod === 'monthly' && lineMonth) {
       const [ly, lm] = lineMonth.split('-').map(Number);
       const daysInMonth = new Date(ly, lm, 0).getDate();
       // 日付→評価額マップ
@@ -1416,11 +1465,11 @@ function renderLineChart() {
     const yMin = Math.floor((minVal - pad) / 10000) * 10000;
     const yMax = Math.ceil((maxVal + pad) / 10000) * 10000;
 
-    // 月次：青グラデーション、それ以外：赤グラデーション
-    const isMonthlyMode = linePeriod === 'monthly';
-    const lineColor = isMonthlyMode ? '#1d6fe8' : '#dc2626';
+    // 月次・年間：青グラデーション、全期間：赤グラデーション
+    const isBlueMode = linePeriod === 'monthly' || linePeriod === 'yearly';
+    const lineColor = isBlueMode ? '#1d6fe8' : '#dc2626';
     const grad = ctx.createLinearGradient(0, 0, 0, 220);
-    if (isMonthlyMode) {
+    if (isBlueMode) {
       grad.addColorStop(0, 'rgba(29,111,232,.22)');
       grad.addColorStop(1, 'rgba(29,111,232,.01)');
     } else {
@@ -1445,7 +1494,7 @@ function renderLineChart() {
           pointHoverBackgroundColor: lineColor,
           pointHoverBorderColor: '#fff',
           pointHoverBorderWidth: 2,
-          borderWidth: isMonthlyMode ? 2.5 : 2,
+          borderWidth: isBlueMode ? 2.5 : 2,
           spanGaps: true   // null の日は線でつなぐ
         }]
       },
@@ -1461,8 +1510,8 @@ function renderLineChart() {
         },
         scales: {
           x: {
-            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit: isMonthlyMode ? 31 : 6, font:{size: isMonthlyMode ? 10 : 11} },
-            grid: { display: isMonthlyMode, color:'rgba(148,163,184,.08)' }
+            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit: linePeriod==='monthly' ? 31 : linePeriod==='yearly' ? 12 : 6, font:{size: linePeriod==='monthly' ? 10 : 11} },
+            grid: { display: isBlueMode, color:'rgba(148,163,184,.08)' }
           },
           y: {
             min: yMin,
