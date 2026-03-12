@@ -1032,33 +1032,43 @@ function renderHoldings(){
     const totalColor=clr(total);
     const dod = getDodForTicker(hd.priceKey);
 
+    const priceDiff = p ? Math.round(p - hd.avgCost) : null;
+    const priceDiffSign = priceDiff !== null ? (priceDiff >= 0 ? '+' : '-') : '';
     return `<div class="holding-card" id="hcard_${k}">
       <div class="holding-card-header" onclick="toggleHoldingCard('${k}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <!-- 左：銘柄情報 -->
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
-            <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden">
-              <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px;flex-shrink:0">${hd.ticker}</span>
-              ${brokerBadge(hd.broker)}${accountBadge(hd.account)}
-              <span style="font-size:12px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(hd.name||'').slice(0,10)+(hd.name&&hd.name.length>10?'…':'')}</span>
-            </div>
-            <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px">
-              ${p
-                ? `<span>株価 <span style="color:var(--text1);font-weight:700">${fmtV(p,hd.market)}</span> <span class="${unrColor}">(${unrP!==null?pct(unrP):'—'})</span></span>`
-                : `<span style="color:var(--red)">未取得</span><button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:1px 6px;border:1px solid var(--text3);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer">入力</button>`
-              }
-            </div>
-            ${p ? `<div style="font-size:11px;color:var(--text3)">取得 <span style="color:var(--text2)">${fmtV(hd.avgCost,hd.market)}</span> <span class="${unrColor}" style="font-weight:600">${unr!==null?(p-hd.avgCost>=0?'+':'-')+'¥'+Math.abs(Math.round(p-hd.avgCost)).toLocaleString()+'/株':'—'}</span></div>` : ''}
+        <!-- 行1: コード・バッジ・銘柄名・現在値・取得比 | 損益率 -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow:hidden;flex-wrap:nowrap">
+            <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:13px;flex-shrink:0">${hd.ticker}</span>
+            ${brokerBadge(hd.broker)}${accountBadge(hd.account)}
+            <span style="font-size:12px;color:var(--text2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">${(hd.name||'').slice(0,8)+(hd.name&&hd.name.length>8?'…':'')}</span>
+            ${p
+              ? `<span style="font-size:12px;color:var(--text1);font-weight:700;white-space:nowrap;flex-shrink:0">${fmtV(p,hd.market)}</span>
+                 <span class="${unrColor}" style="font-size:11px;white-space:nowrap;flex-shrink:0">${priceDiffSign}¥${Math.abs(priceDiff).toLocaleString()}</span>`
+              : `<span style="color:var(--red);font-size:11px;flex-shrink:0">未取得</span>`
+            }
           </div>
-          <!-- 右：損益情報 -->
-          <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-            <div style="font-size:9px;color:var(--text3);font-weight:600;letter-spacing:.3px">含み損益</div>
-            <div class="mono ${unrColor}" style="font-size:16px;font-weight:800;line-height:1.1;white-space:nowrap">${unr!==null?(unr>=0?'+':'-')+'¥'+Math.abs(Math.round(unr)).toLocaleString():'—'}</div>
-            ${dod ? `<div style="margin-top:2px;font-size:9px;color:var(--text3);font-weight:600;letter-spacing:.3px">前日比</div>
-            <div class="mono ${clr(dod.change)}" style="font-size:12px;font-weight:700;white-space:nowrap">${dod.change>=0?'+':''}${dod.changePct.toFixed(2)}%</div>
-            <div style="font-size:10px;color:${dod.change>=0?'var(--green)':'var(--red)'};white-space:nowrap">${dod.change>=0?'+':'-'}¥${Math.round(Math.abs(dod.change)*hd.qty).toLocaleString()}</div>` : ''}
+          <div style="flex-shrink:0;text-align:right">
+            <span class="${unrColor}" style="font-size:13px;font-weight:700;white-space:nowrap">${unrP!==null?pct(unrP):'—'}</span>
           </div>
         </div>
+        <!-- 行2: 取得単価 | 含み損益±円・% -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+          <div style="font-size:11px;color:var(--text3)">
+            取得 <span style="color:var(--text2);font-weight:600">${fmtV(hd.avgCost,hd.market)}</span>
+            ${!p ? `<button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:1px 6px;border:1px solid var(--text3);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer;margin-left:4px">入力</button>` : ''}
+          </div>
+          <div style="text-align:right;display:flex;align-items:center;gap:6px">
+            <span class="mono ${unrColor}" style="font-size:13px;font-weight:700;white-space:nowrap">${unr!==null?(unr>=0?'+':'-')+'¥'+Math.abs(Math.round(unr)).toLocaleString():'—'}</span>
+            <span class="${unrColor}" style="font-size:11px;white-space:nowrap">${unrP!==null?pct(unrP):'—'}</span>
+          </div>
+        </div>
+        <!-- 行3: 前日比（あれば） -->
+        ${dod ? `<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+          <span style="font-size:10px;color:var(--text3)">前日比</span>
+          <span class="mono ${clr(dod.change)}" style="font-size:12px;font-weight:700;white-space:nowrap">${dod.change>=0?'+':'-'}¥${Math.round(Math.abs(dod.change)*hd.qty).toLocaleString()}</span>
+          <span class="${clr(dod.change)}" style="font-size:11px;font-weight:700;white-space:nowrap">${dod.change>=0?'+':''}${dod.changePct.toFixed(2)}%</span>
+        </div>` : ''}
       </div>
       <div class="holding-card-detail" id="hdetail_${k}">
         <div class="holding-card-detail-inner">
