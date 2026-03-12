@@ -887,7 +887,32 @@ function setTradesBrokerFilter(b) {
   renderTrades();
 }
 
-function renderAll(){renderSummary();renderHoldings();renderTrades();renderDividends();renderIncomeSection();renderCharts();updateUpdated();}
+// 各タブの描画済みフラグ
+var _rendered = {summary:false, holdings:false, trades:false, dividends:false, income:false, charts:false};
+
+function renderAll(){
+  // 全フラグリセットして再描画が必要な状態に
+  _rendered = {summary:false, holdings:false, trades:false, dividends:false, income:false, charts:false};
+  // ホーム(summary)を最優先で同期描画
+  renderSummary(); _rendered.summary = true;
+  updateUpdated();
+  // 残りをrAFで分割して順番に描画（メインスレッドをブロックしない）
+  requestAnimationFrame(function(){
+    renderHoldings(); _rendered.holdings = true;
+    requestAnimationFrame(function(){
+      renderTrades(); _rendered.trades = true;
+      requestAnimationFrame(function(){
+        renderDividends(); _rendered.dividends = true;
+        requestAnimationFrame(function(){
+          renderIncomeSection(); _rendered.income = true;
+          requestAnimationFrame(function(){
+            renderCharts(); _rendered.charts = true;
+          });
+        });
+      });
+    });
+  });
+}
 
 function renderSummary(){
   const h=computeHoldings();
@@ -2894,8 +2919,14 @@ function switchTab(name){
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   el('tab-'+name).classList.add('active');
   document.querySelector(`[data-tab="${name}"]`).classList.add('active');
-  if(name==='dashboard')setTimeout(()=>{renderCharts();renderStockSummary();},50);
-  if(name==='calendar')renderCalendar();
+  if(name==='dashboard'){
+    if(!_rendered.charts) { renderCharts(); _rendered.charts=true; }
+    renderStockSummary();
+  }
+  if(name==='holdings' && !_rendered.holdings){ renderHoldings(); _rendered.holdings=true; }
+  if(name==='trades'   && !_rendered.trades)  { renderTrades();   _rendered.trades=true;   }
+  if(name==='dividends'&& !_rendered.dividends){ renderDividends(); _rendered.dividends=true; }
+  if(name==='calendar') renderCalendar();
 }
 
 // ===================== SWIPE =====================
@@ -3092,7 +3123,11 @@ const el=id=>document.getElementById(id);
 const v=id=>el(id).value;
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 
-load();renderAll();
+load();
+// 最初のペイントを先に済ませてからレンダリング開始
+requestAnimationFrame(function(){
+  setTimeout(renderAll, 0);
+});
 </script>
 </body>
 </html>
