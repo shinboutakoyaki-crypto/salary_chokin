@@ -137,7 +137,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 .tab-content.active{display:block;}
 .holding-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;transition:border-color .2s;box-shadow:0 2px 10px rgba(29,111,232,.07);}
 .holding-card:active{border-color:var(--accent);}
-.holding-card-header{padding:14px 16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;}
+.holding-card-header{padding:11px 14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;}
 .holding-card-detail{max-height:0;overflow:hidden;transition:max-height .3s ease;}
 .holding-card-detail.open{max-height:400px;}
 .holding-card-detail-inner{padding:0 16px 14px;border-top:1px solid var(--border);}
@@ -1034,25 +1034,29 @@ function renderHoldings(){
 
     return `<div class="holding-card" id="hcard_${k}">
       <div class="holding-card-header" onclick="toggleHoldingCard('${k}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;flex-wrap:nowrap;overflow:hidden">
-              <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:15px;flex-shrink:0">${hd.ticker}</span>
-              ${brokerBadge(hd.broker)}
-              ${accountBadge(hd.account)}
-              <span style="font-size:12px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">${(hd.name||'').slice(0,8)+(hd.name&&hd.name.length>8?'…':'')}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <!-- 左：銘柄情報 -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow:hidden">
+              <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:14px;flex-shrink:0">${hd.ticker}</span>
+              ${brokerBadge(hd.broker)}${accountBadge(hd.account)}
+              <span style="font-size:12px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(hd.name||'').slice(0,10)+(hd.name&&hd.name.length>10?'…':'')}</span>
             </div>
-            <div style="font-size:11px;color:var(--text3)">
-              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red)">株価未取得</span> <button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:2px 7px;border:1px solid var(--text3);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer">手動入力</button>`}
-              ${unrP!==null?`<span class="${unrColor}" style="margin-left:4px">(${pct(unrP)})</span>`:''}
+            <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px">
+              ${p
+                ? `<span>株価 <span style="color:var(--text1);font-weight:700">${fmtV(p,hd.market)}</span> <span class="${unrColor}">(${unrP!==null?pct(unrP):'—'})</span></span>`
+                : `<span style="color:var(--red)">未取得</span><button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:1px 6px;border:1px solid var(--text3);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer">入力</button>`
+              }
             </div>
+            ${p ? `<div style="font-size:11px;color:var(--text3)">取得 <span style="color:var(--text2)">${fmtV(hd.avgCost,hd.market)}</span> <span class="${unrColor}" style="font-weight:600">${unr!==null?(p-hd.avgCost>=0?'+':'-')+'¥'+Math.abs(Math.round(p-hd.avgCost)).toLocaleString()+'/株':'—'}</span></div>` : ''}
           </div>
-          <div style="text-align:right;flex-shrink:0;min-width:90px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:1px">含み損益</div>
-            <div class="mono ${unrColor}" style="font-size:15px;font-weight:700;white-space:nowrap">${unr!==null?(unr>=0?'+':'-')+'¥'+Math.abs(Math.round(unr)).toLocaleString():'—'}</div>
-            ${dod ? `<div style="font-size:10px;color:var(--text3);margin-top:5px;margin-bottom:1px">前日比</div>
+          <!-- 右：損益情報 -->
+          <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:1px">
+            <div style="font-size:9px;color:var(--text3);font-weight:600;letter-spacing:.3px">含み損益</div>
+            <div class="mono ${unrColor}" style="font-size:16px;font-weight:800;line-height:1.1;white-space:nowrap">${unr!==null?(unr>=0?'+':'-')+'¥'+Math.abs(Math.round(unr)).toLocaleString():'—'}</div>
+            ${dod ? `<div style="margin-top:2px;font-size:9px;color:var(--text3);font-weight:600;letter-spacing:.3px">前日比</div>
             <div class="mono ${clr(dod.change)}" style="font-size:12px;font-weight:700;white-space:nowrap">${dod.change>=0?'+':''}${dod.changePct.toFixed(2)}%</div>
-            <div style="font-size:10px;color:${dod.change>=0?'var(--green)':'var(--red)'};white-space:nowrap">${dod.change>=0?'+':''}¥${Math.round(Math.abs(dod.change)*hd.qty).toLocaleString()}</div>` : ''}
+            <div style="font-size:10px;color:${dod.change>=0?'var(--green)':'var(--red)'};white-space:nowrap">${dod.change>=0?'+':'-'}¥${Math.round(Math.abs(dod.change)*hd.qty).toLocaleString()}</div>` : ''}
           </div>
         </div>
       </div>
@@ -1355,13 +1359,22 @@ function fmtMan2(v) {
 }
 
 function renderLineChart() {
-  // lineMonth/lineYear が未初期化なら現在日時で初期化
+  // lineMonth/lineYear が未初期化なら最新データ月で初期化（なければ現在）
   if (!lineMonth) {
-    const now = new Date();
-    lineMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    if (S.pnlHistory && S.pnlHistory.length) {
+      const latest = S.pnlHistory[S.pnlHistory.length - 1].date;
+      lineMonth = latest.slice(0, 7); // "YYYY-MM"
+    } else {
+      const now = new Date();
+      lineMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    }
   }
   if (!lineYear) {
-    lineYear = String(new Date().getFullYear());
+    if (S.pnlHistory && S.pnlHistory.length) {
+      lineYear = S.pnlHistory[S.pnlHistory.length - 1].date.slice(0, 4);
+    } else {
+      lineYear = String(new Date().getFullYear());
+    }
   }
   // ナビバーの表示状態を確実に同期
   const monthNav = el('monthlyNavBar');
@@ -1470,7 +1483,7 @@ function renderLineChart() {
     const allVals = assetData.filter(v => v !== null);
     const minVal = Math.min(...allVals);
     const maxVal = Math.max(...allVals);
-    const pad = (maxVal - minVal) * 0.08 || maxVal * 0.02;
+    const pad = allVals.length <= 1 ? maxVal * 0.05 : (maxVal - minVal) * 0.15 || maxVal * 0.02;
     const yMin = Math.floor((minVal - pad) / 10000) * 10000;
     const yMax = Math.ceil((maxVal + pad) / 10000) * 10000;
 
