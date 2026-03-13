@@ -159,7 +159,11 @@ tr:active td{background:rgba(56,189,248,.05);}
 .amounts-hidden .holding-card .up,
 .amounts-hidden .holding-card .down,
 .amounts-hidden .holding-card .neutral,
-.amounts-hidden #summaryGrid .s-value {
+.amounts-hidden #summaryGrid .s-value,
+.amounts-hidden #holdingsValTotal,
+.amounts-hidden #holdingsCostTotal,
+.amounts-hidden #holdingsUnrTotal,
+.amounts-hidden #holdingsUnrPct {
   filter: blur(8px);
   user-select: none;
   transition: filter .2s;
@@ -291,7 +295,8 @@ tr:active td{background:rgba(56,189,248,.05);}
         </div>
       </div>
     </div>
-    <div id="holdingsBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <div id="holdingsBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
+    <div id="holdingsSortBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px"></div>
     <div id="holdingsCards" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 
@@ -707,8 +712,8 @@ function fetchPrice(ticker,market){
     return new Promise(function(resolve){
       var done=false;
       var yUrls=[
-        'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=5d',
-        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=5d'
+        'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=2m&range=1d',
+        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=2m&range=1d'
       ];
       // 全プロキシ×全ホストを一斉に投げて最速を使う
       var allUrls=[];
@@ -854,6 +859,7 @@ const clr=v=>v>0?'up':v<0?'down':'neutral';
 const mkChip=(pos,label)=>`<span class="chip chip-${pos?'up':'down'}">${label}</span>`;
 
 let holdingsBrokerFilter = 'all';
+let holdingsSort = { key: 'none', dir: 1 }; // key: none/unr/unrP/dod/dodP, dir: 1=降順 -1=昇順
 let tradesBrokerFilter = 'all';
 
 function getBrokers(items, key) {
@@ -876,6 +882,14 @@ function renderBrokerFilterBar(containerId, brokers, current, onSelect) {
 
 function setHoldingsBrokerFilter(b) {
   holdingsBrokerFilter = b;
+  renderHoldings();
+}
+function setHoldingsSort(key) {
+  if (holdingsSort.key === key) {
+    holdingsSort.dir *= -1;
+  } else {
+    holdingsSort = { key, dir: 1 };
+  }
   renderHoldings();
 }
 
@@ -999,6 +1013,51 @@ function renderHoldings(){
     if (unrEl) { unrEl.textContent = '—'; unrEl.style.color = ''; }
     if (unrPctEl) { unrPctEl.textContent = ''; }
     return;
+  }
+
+  // ソートバー描画
+  const sortBar = el('holdingsSortBar');
+  if (sortBar) {
+    const sortDefs = [
+      { key:'unr',  label:'損益額' },
+      { key:'unrP', label:'損益率' },
+      { key:'dod',  label:'前日比(額)' },
+      { key:'dodP', label:'前日比(率)' },
+    ];
+    sortBar.innerHTML = '<span style="font-size:11px;color:var(--text3);flex-shrink:0">並び替え</span>' +
+      sortDefs.map(s => {
+        const active = holdingsSort.key === s.key;
+        const arrow = active ? (holdingsSort.dir === 1 ? ' ↓' : ' ↑') : '';
+        return `<button onclick="setHoldingsSort('${s.key}')" style="font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid ${active?'var(--accent)':'var(--border2)'};background:${active?'var(--accent)':'transparent'};color:${active?'#fff':'var(--text3)'};cursor:pointer;font-weight:${active?700:400}">${s.label}${arrow}</button>`;
+      }).join('');
+  }
+
+  // ソート処理
+  if (holdingsSort.key !== 'none') {
+    keys.sort((a, b) => {
+      const ha = h[a], hb = h[b];
+      const pa = S.prices[ha.priceKey] || null;
+      const pb = S.prices[hb.priceKey] || null;
+      let va = 0, vb = 0;
+      if (holdingsSort.key === 'unr') {
+        va = pa ? (pa - ha.avgCost) * ha.qty : -Infinity;
+        vb = pb ? (pb - hb.avgCost) * hb.qty : -Infinity;
+      } else if (holdingsSort.key === 'unrP') {
+        va = pa && ha.avgCost > 0 ? (pa - ha.avgCost) / ha.avgCost : -Infinity;
+        vb = pb && hb.avgCost > 0 ? (pb - hb.avgCost) / hb.avgCost : -Infinity;
+      } else if (holdingsSort.key === 'dod' || holdingsSort.key === 'dodP') {
+        const da = getDodForTicker(ha.priceKey);
+        const db = getDodForTicker(hb.priceKey);
+        if (holdingsSort.key === 'dod') {
+          va = da ? da.change * ha.qty : -Infinity;
+          vb = db ? db.change * hb.qty : -Infinity;
+        } else {
+          va = da ? da.changePct : -Infinity;
+          vb = db ? db.changePct : -Infinity;
+        }
+      }
+      return (vb - va) * holdingsSort.dir;
+    });
   }
 
   // 配当合計（銘柄別）
