@@ -712,8 +712,8 @@ function fetchPrice(ticker,market){
     return new Promise(function(resolve){
       var done=false;
       var yUrls=[
-        'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=2m&range=1d',
-        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=2m&range=1d'
+        'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d',
+        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d'
       ];
       // 全プロキシ×全ホストを一斉に投げて最速を使う
       var allUrls=[];
@@ -760,7 +760,7 @@ function refreshPrices(){
   var globalTimeout=setTimeout(function(){
     btn.disabled=false;icon.classList.remove('spin');
     S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
-  },90000);
+  },40000);
 
   function processChunk(remaining){
     if(remaining.length===0){
@@ -1846,7 +1846,7 @@ function renderPnlRanking() {
       if (!dod) return null;
       const changeAmt = dod.change * hd.qty;
       return { ticker: hd.ticker, name: hd.name||'', market: hd.market, changePct: dod.changePct, changeAmt, hasDod: true };
-    }).filter(r => r !== null).sort((a,b) => b.changePct - a.changePct).slice(0, 5);
+    }).filter(r => r !== null).sort((a,b) => Math.abs(b.changePct) - Math.abs(a.changePct)).slice(0, 5);
 
     if (!ranked.length) {
       view.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>前日比データがありません<div style="font-size:11px;margin-top:4px;color:var(--text3)">毎日更新すると翌日から表示されます</div></div>';
