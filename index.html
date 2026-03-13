@@ -1095,8 +1095,9 @@ function renderHoldings(){
               <span style="font-size:12px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">${(hd.name||'').slice(0,8)+(hd.name&&hd.name.length>8?'…':'')}</span>
             </div>
             <div style="font-size:11px;color:var(--text3)">
-              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red)">株価未取得</span> <button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:2px 7px;border:1px solid var(--text3);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer">手動入力</button>`}
+              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red)">株価未取得</span>`}
               ${unrP!==null?`<span class="${unrColor}" style="margin-left:4px">(${pct(unrP)})</span>`:''}
+              <button onclick="manualPrice('${k}');event.stopPropagation()" style="font-size:10px;padding:2px 6px;border:1px solid var(--border2);border-radius:5px;color:var(--text3);background:transparent;cursor:pointer;margin-left:4px">手動</button>
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;min-width:90px">
