@@ -702,10 +702,8 @@ function fetchPrice(ticker,market){
         if(!d){res(null);return;}
         var result=d.chart&&d.chart.result&&d.chart.result[0];
         var meta=result&&result.meta;
-        // closes配列の最新値を終値として使う（regularMarketPriceより正確）
-        var closes=result&&result.indicators&&result.indicators.quote&&result.indicators.quote[0]&&result.indicators.quote[0].close;
-        var latestClose=closes&&closes.length?closes.filter(function(v){return v!=null;}).pop():null;
-        var p=latestClose||(meta?(meta.regularMarketPrice||meta.chartPreviousClose):null);
+        // regularMarketPrice = リアルタイム/最終約定値、市場時間外は直前の終値
+        var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
         var prev=meta?(meta.previousClose||meta.chartPreviousClose):null;
         if(p&&p>0)res({price:parseFloat(p),prevClose:(prev&&prev>0)?parseFloat(prev):null});
         else res(null);
