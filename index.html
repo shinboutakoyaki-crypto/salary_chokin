@@ -247,6 +247,11 @@ tr:active td{background:rgba(56,189,248,.05);}
           <button onclick="shiftLineYear(1)" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--accent);padding:0 6px">›</button>
         </div>
       </div>
+      <!-- 実損益：単月/累計サブ切り替え -->
+      <div id="pnlSubToggle" style="display:none;padding:6px 16px 0;display:none;gap:6px">
+        <button id="pnlSub_monthly" onclick="setPnlSubMode('monthly')" class="btn btn-sm btn-primary" style="padding:3px 12px;font-size:11px">単月</button>
+        <button id="pnlSub_cumulative" onclick="setPnlSubMode('cumulative')" class="btn btn-sm btn-ghost" style="padding:3px 12px;font-size:11px">累計</button>
+      </div>
       <div id="pnlSummaryBar" style="display:none;padding:8px 16px 0">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:rgba(220,38,38,.06);border-radius:10px;border:1px solid rgba(220,38,38,.15)">
           <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
@@ -1448,6 +1453,21 @@ function shiftLineMonth(delta) {
   renderLineChart();
 }
 
+var pnlSubMode = 'monthly'; // 'monthly' or 'cumulative'
+function setPnlSubMode(mode) {
+  pnlSubMode = mode;
+  ['monthly','cumulative'].forEach(function(k) {
+    var b = el('pnlSub_'+k);
+    if (!b) return;
+    b.className = 'btn btn-sm ' + (k===mode?'btn-primary':'btn-ghost');
+    b.style.padding='3px 12px'; b.style.fontSize='11px';
+  });
+  // 単月のみ月ナビ表示
+  var nav = el('monthlyNavBar');
+  if (nav) nav.style.display = mode==='monthly' ? '' : 'none';
+  renderLineChart();
+}
+
 function setAssetMode(mode) {
   assetMode = mode;
   el('assetToggle_asset').className = 'btn btn-sm ' + (mode==='asset'?'btn-primary':'btn-ghost');
@@ -1458,14 +1478,17 @@ function setAssetMode(mode) {
   const pb = el('linePeriodBtns');
   if (pb) pb.style.display = mode==='asset' ? '' : 'none';
   if (mode === 'asset') {
+    // 総資産：サブトグル非表示
+    const sub = el('pnlSubToggle'); if (sub) sub.style.display = 'none';
     // 総資産：linePeriodに応じてナビ表示
     const nav = el('monthlyNavBar'); if (nav) nav.style.display = linePeriod==='monthly' ? '' : 'none';
     const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = linePeriod==='yearly' ? '' : 'none';
   } else {
-    // 実損益：月ナビを表示（月切り替え用）、年ナビは非表示
-    const nav = el('monthlyNavBar'); if (nav) nav.style.display = '';
+    // 実損益：サブ切り替えボタン表示
+    const sub = el('pnlSubToggle'); if (sub) sub.style.display = 'flex';
+    // 単月モードのとき月ナビ表示
+    const nav = el('monthlyNavBar'); if (nav) nav.style.display = pnlSubMode==='monthly' ? '' : 'none';
     const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = 'none';
-    // lineMonthが未設定なら今月にセット
     if (!lineMonth) {
       const n = new Date();
       lineMonth = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0');
@@ -1621,17 +1644,8 @@ function renderLineChart() {
     const yMin = Math.floor((minVal - pad) / 10000) * 10000;
     const yMax = Math.ceil((maxVal + pad) / 10000) * 10000;
 
-    // 月次・年間：青グラデーション、全期間：赤グラデーション
     const isBlueMode = linePeriod === 'monthly' || linePeriod === 'yearly';
     const lineColor = isBlueMode ? '#1d6fe8' : '#dc2626';
-    const grad = ctx.createLinearGradient(0, 0, 0, 220);
-    if (isBlueMode) {
-      grad.addColorStop(0, 'rgba(29,111,232,.22)');
-      grad.addColorStop(1, 'rgba(29,111,232,.01)');
-    } else {
-      grad.addColorStop(0, 'rgba(220,38,38,.18)');
-      grad.addColorStop(1, 'rgba(220,38,38,.0)');
-    }
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1641,17 +1655,16 @@ function renderLineChart() {
           label: '評価額',
           data: assetData,
           borderColor: lineColor,
-          backgroundColor: grad,
-          fill: true,
-          tension: 0,
-          pointRadius: pointRadii,
-          pointBackgroundColor: pointBgColors,
-          pointHoverRadius: 6,
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 5,
           pointHoverBackgroundColor: lineColor,
           pointHoverBorderColor: '#fff',
           pointHoverBorderWidth: 2,
-          borderWidth: isBlueMode ? 2.5 : 2,
-          spanGaps: true   // null の日は線でつなぐ
+          borderWidth: 2.5,
+          spanGaps: true
         }]
       },
       options: {
@@ -1666,14 +1679,14 @@ function renderLineChart() {
         },
         scales: {
           x: {
-            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit: linePeriod==='monthly' ? 31 : linePeriod==='yearly' ? 12 : 6, font:{size: linePeriod==='monthly' ? 10 : 11} },
-            grid: { display: isBlueMode, color:'rgba(148,163,184,.08)' }
+            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit: linePeriod==='monthly' ? 15 : linePeriod==='yearly' ? 12 : 6, font:{size:11} },
+            grid: { display: false }
           },
           y: {
             min: yMin,
             max: yMax,
             ticks: { color:'#94a3b8', callback: v => fmtMan2(v)+'円', font:{size:11}, maxTicksLimit:4 },
-            grid: { color:'rgba(148,163,184,.12)' }
+            grid: { color:'rgba(148,163,184,.1)' }
           }
         }
       }
@@ -1707,14 +1720,71 @@ function renderLineChart() {
 
     let trades = sellTrades;
     if (acctFilter !== 'all') trades = trades.filter(t => (t.memo||'') === acctFilter);
-    // 月フィルター：選択月のみ表示
-    const pnlFilteredByMonth = trades.filter(t => t.date.slice(0,7) === lineMonth);
     trades.sort((a,b) => new Date(a.date)-new Date(b.date));
     if (!trades.length) {
-      ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
-      ctx.fillText(acctFilter==='all'?'売却履歴がありません':'該当する売却履歴がありません', canvas.width/2, canvas.height/2);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('売却履歴がありません', canvas.width/2, canvas.height/2);
       return;
     }
+
+    // ── 累計モード ────────────────────────────────────────
+    if (pnlSubMode === 'cumulative') {
+      const monthMap2 = {};
+      let cum2 = 0;
+      for (const t of trades) {
+        cum2 += t.realizedPnl || 0;
+        const ym = t.date.slice(0,7);
+        monthMap2[ym] = Math.round(cum2);
+      }
+      const allYms2 = Object.keys(monthMap2).sort();
+      const now2 = new Date();
+      const endYm2 = now2.getFullYear()+'-'+String(now2.getMonth()+1).padStart(2,'0');
+      const cumLabels = [], cumData = [];
+      let cur2 = new Date(allYms2[0]+'-01');
+      const endDate2 = new Date(endYm2+'-01');
+      let lastV = 0;
+      while (cur2 <= endDate2) {
+        const ym = cur2.getFullYear()+'-'+String(cur2.getMonth()+1).padStart(2,'0');
+        if (monthMap2[ym] !== undefined) lastV = monthMap2[ym];
+        cumLabels.push(ym.slice(2).replace('-','/'));
+        cumData.push(lastV);
+        cur2.setMonth(cur2.getMonth()+1);
+      }
+      const bar2 = el('pnlSummaryBar'), valEl2 = el('pnlSummaryValue');
+      if (bar2) bar2.style.display = '';
+      if (valEl2) valEl2.textContent = (cum2>=0?'+':'')+' ¥'+Math.round(cum2).toLocaleString();
+      charts['line'] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: cumLabels,
+          datasets: [{
+            label: '累計実現損益',
+            data: cumData,
+            borderColor: '#dc2626',
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#dc2626',
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
+            borderWidth: 2.5,
+            spanGaps: true
+          }]
+        },
+        options: {
+          ...cOpts,
+          plugins: { legend:{display:false}, tooltip:{callbacks:{label: c => (c.raw>=0?'+':'')+' ¥'+Math.round(c.raw).toLocaleString()}} },
+          scales: {
+            x: { ticks:{color:'#94a3b8',maxRotation:0,maxTicksLimit:8,font:{size:11}}, grid:{display:false} },
+            y: { ticks:{color:'#94a3b8',callback:v=>fmtMan2(v),font:{size:11},maxTicksLimit:4}, grid:{color:'rgba(148,163,184,.1)'} }
+          }
+        }
+      });
+      return;
+    }
+    // ── 単月モード ────────────────────────────────────────
 
     // 月別に累計を集計
     const monthMap = {};
@@ -1807,9 +1877,6 @@ function renderLineChart() {
     // 日別累計に変換（折れ線用）
     let cumDay = 0;
     const dayCumData = dayData.map(v => { cumDay += v; return cumDay; });
-    const gradPnlDay = ctx.createLinearGradient(0,0,0,210);
-    gradPnlDay.addColorStop(0,'rgba(220,38,38,.2)');
-    gradPnlDay.addColorStop(1,'rgba(220,38,38,.0)');
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1819,13 +1886,14 @@ function renderLineChart() {
           label: '日別累計実現損益',
           data: dayCumData,
           borderColor: '#dc2626',
-          backgroundColor: gradPnlDay,
-          fill: true,
+          backgroundColor: 'transparent',
+          fill: false,
           tension: 0.3,
-          pointRadius: dayCumData.map(v => v !== 0 ? 4 : 2),
-          pointBackgroundColor: '#dc2626',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#dc2626',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
           borderWidth: 2.5,
           spanGaps: true
         }]
@@ -1835,12 +1903,12 @@ function renderLineChart() {
         plugins: { legend: { display: false } },
         scales: {
           x: {
-            ticks: { color:'#94a3b8', font:{size:10}, maxRotation:0, maxTicksLimit:15 },
+            ticks: { color:'#94a3b8', font:{size:11}, maxRotation:0, maxTicksLimit:15 },
             grid: { display: false }
           },
           y: {
             ticks: { color:'#94a3b8', callback: v => fmtMan2(v), font:{size:11}, maxTicksLimit:4 },
-            grid: { color:'rgba(148,163,184,.12)' }
+            grid: { color:'rgba(148,163,184,.1)' }
           }
         }
       }
