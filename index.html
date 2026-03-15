@@ -250,7 +250,7 @@ tr:active td{background:rgba(56,189,248,.05);}
       <div id="pnlSummaryBar" style="display:none;padding:8px 16px 0">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:rgba(220,38,38,.06);border-radius:10px;border:1px solid rgba(220,38,38,.15)">
           <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-            <select id="pnlMonthSelect" onchange="onPnlMonthChange()" style="padding:4px 8px;font-size:12px;border:1px solid rgba(220,38,38,.25);border-radius:8px;background:#fff;color:var(--text);font-family:inherit"></select>
+            <select id="pnlMonthSelect" onchange="onPnlMonthChange()" style="display:none"></select>
             <select id="pnlAccountSelect" onchange="onPnlAccountChange()" style="padding:4px 8px;font-size:12px;border:1px solid rgba(220,38,38,.25);border-radius:8px;background:#fff;color:var(--text);font-family:inherit">
               <option value="all">全て</option>
             </select>
@@ -1454,17 +1454,24 @@ function setAssetMode(mode) {
   el('assetToggle_pnl').className = 'btn btn-sm ' + (mode==='pnl'?'btn-primary':'btn-ghost');
   el('assetToggle_asset').style.padding='4px 10px'; el('assetToggle_asset').style.fontSize='11px';
   el('assetToggle_pnl').style.padding='4px 10px'; el('assetToggle_pnl').style.fontSize='11px';
-  // 期間ボタン：実損益は非表示
+  // 期間ボタン：総資産のみ表示
   const pb = el('linePeriodBtns');
   if (pb) pb.style.display = mode==='asset' ? '' : 'none';
-  // 月次・年間ナビ・リストも実損益では非表示
-  if (mode !== 'asset') {
-    const nav = el('monthlyNavBar'); if (nav) nav.style.display = 'none';
-    const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = 'none';
-  } else if (linePeriod === 'monthly') {
+  if (mode === 'asset') {
+    // 総資産：linePeriodに応じてナビ表示
+    const nav = el('monthlyNavBar'); if (nav) nav.style.display = linePeriod==='monthly' ? '' : 'none';
+    const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = linePeriod==='yearly' ? '' : 'none';
+  } else {
+    // 実損益：月ナビを表示（月切り替え用）、年ナビは非表示
     const nav = el('monthlyNavBar'); if (nav) nav.style.display = '';
-  } else if (linePeriod === 'yearly') {
-    const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = '';
+    const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = 'none';
+    // lineMonthが未設定なら今月にセット
+    if (!lineMonth) {
+      const n = new Date();
+      lineMonth = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0');
+    }
+    const lbl = el('lineMonthLabel');
+    if (lbl) { const [y,m] = lineMonth.split('-'); lbl.textContent = y+'/'+parseInt(m)+'月'; }
   }
   renderLineChart();
 }
@@ -1690,8 +1697,18 @@ function renderLineChart() {
     }
     const acctFilter = acctSel ? acctSel.value : 'all';
 
+    // 月ナビラベル更新
+    if (!lineMonth) {
+      const n = new Date();
+      lineMonth = n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0');
+    }
+    const pnlMonthLbl = el('lineMonthLabel');
+    if (pnlMonthLbl) { const [y,m] = lineMonth.split('-'); pnlMonthLbl.textContent = y+'/'+parseInt(m)+'月'; }
+
     let trades = sellTrades;
     if (acctFilter !== 'all') trades = trades.filter(t => (t.memo||'') === acctFilter);
+    // 月フィルター：選択月のみ表示
+    const pnlFilteredByMonth = trades.filter(t => t.date.slice(0,7) === lineMonth);
     trades.sort((a,b) => new Date(a.date)-new Date(b.date));
     if (!trades.length) {
       ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
@@ -1757,14 +1774,10 @@ function renderLineChart() {
       sel.value = '__all__';
     }
     function updatePnlVal() {
-      if (!sel || !valEl) return;
-      const v = sel.value;
-      if (v === '__all__') {
-        valEl.textContent = (cum >= 0 ? '+' : '') + '¥' + Math.round(cum).toLocaleString();
-      } else {
-        const monthly = Math.round(monthlyPnl[v] || 0);
-        valEl.textContent = (monthly >= 0 ? '+' : '') + '¥' + monthly.toLocaleString();
-      }
+      if (!valEl) return;
+      // 選択月の損益を表示
+      const monthly = Math.round(monthlyPnl[lineMonth] || 0);
+      valEl.textContent = (monthly >= 0 ? '+' : '') + '¥' + monthly.toLocaleString();
     }
     window.onPnlMonthChange = updatePnlVal;
     updatePnlVal();
@@ -1775,13 +1788,26 @@ function renderLineChart() {
 
     const baseRadius = data.length <= 12 ? 5 : data.length <= 24 ? 3 : 2;
 
+    // 選択月のデータのみ表示
+    const monthStart = lineMonth + '-01';
+    const monthEnd = lineMonth + '-31';
+    const monthLabels = [], monthData = [];
+    for (let i = 0; i < labels.length; i++) {
+      const ym = ymList[i];
+      if (ym === lineMonth) { monthLabels.push(labels[i]); monthData.push(data[i]); }
+      else if (ym < lineMonth) { /* skip but keep lastVal */ }
+    }
+    // 月内の日別データがない場合は月単位で1点だけ表示
+    const finalLabels = monthLabels.length ? monthLabels : [lineMonth.slice(2).replace('-','/')];
+    const finalData = monthData.length ? monthData : [Math.round(monthlyPnl[lineMonth]||0)];
+
     charts['line'] = new Chart(canvas, {
       type: 'line',
       data: {
-        labels,
+        labels: finalLabels,
         datasets: [{
-          label: '累計実現損益',
-          data,
+          label: lineMonth.slice(2).replace('-','/')+'月 実現損益',
+          data: finalData,
           borderColor: '#dc2626',
           backgroundColor: gradPnl,
           fill: true, tension: .3,
