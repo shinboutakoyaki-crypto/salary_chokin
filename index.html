@@ -423,6 +423,20 @@ tr:active td{background:rgba(56,189,248,.05);}
   </div>
 </div>
 <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+<!-- 株価取得ソース切替 -->
+<div style="border:1px solid var(--border2);border-radius:12px;padding:12px 14px">
+  <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px">📡 株価取得ソース</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+    <button id="psBtn_stooq" onclick="setPriceSource('stooq')" style="padding:8px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid var(--accent);cursor:pointer;font-family:inherit;transition:all .15s">
+      stooq<br><span style="font-size:10px;font-weight:400">推奨・高安定</span>
+    </button>
+    <button id="psBtn_yahoo" onclick="setPriceSource('yahoo')" style="padding:8px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid var(--accent);cursor:pointer;font-family:inherit;background:transparent;color:var(--accent);transition:all .15s">
+      Yahoo Finance<br><span style="font-size:10px;font-weight:400">旧来・プロキシ経由</span>
+    </button>
+  </div>
+  <div style="font-size:10px;color:var(--text3);margin-top:7px">stooqは失敗時にYahooへ自動切替します</div>
+</div>
+<div style="border-top:1px solid var(--border);margin:4px 0"></div>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
 <div class="modal-overlay" id="accountModal">
   <div class="modal" style="max-width:320px">
@@ -682,8 +696,55 @@ let csvImportData=null,csvDivData=null;
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
 function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 
-function fetchPrice(ticker,market){
-  // プロキシ複数 + query1/query2 同時リクエストで最速応答を使う
+// ── 株価取得モード設定 ──────────────────────────────
+// 'stooq'  : stooq優先 → 失敗時にYahoo Financeへ自動フォールバック（デフォルト）
+// 'yahoo'  : Yahoo Finance（旧来）のみ
+var PRICE_SOURCE = (function(){
+  try{ return localStorage.getItem('priceSource')||'stooq'; }catch(e){ return 'stooq'; }
+})();
+function setPriceSource(src){
+  PRICE_SOURCE=src;
+  try{ localStorage.setItem('priceSource',src); }catch(e){}
+  // メニュー内のボタン見た目を更新
+  ['stooq','yahoo'].forEach(function(s){
+    var b=el('psBtn_'+s);
+    if(!b)return;
+    b.style.background=s===src?'var(--accent)':'transparent';
+    b.style.color=s===src?'#fff':'var(--accent)';
+  });
+}
+
+// ── stooq から取得（CORSフリー・CSV形式） ────────────────
+function fetchPriceStooq(ticker, market){
+  // stooqシンボル: 日本株→ "7203.jp"、米国株→ "aapl.us"
+  var sym = market==='JP' ? ticker+'.jp' : ticker.toLowerCase()+'.us';
+  var url = 'https://stooq.com/q/l/?s='+sym+'&f=sd2t2ohlcv&h&e=csv';
+  return new Promise(function(resolve){
+    var ctrl=new AbortController();
+    var tid=setTimeout(function(){ctrl.abort();resolve(null);},7000);
+    fetch(url,{signal:ctrl.signal}).then(function(r){
+      clearTimeout(tid);
+      if(!r.ok){resolve(null);return null;}
+      return r.text();
+    }).then(function(text){
+      if(!text){resolve(null);return;}
+      // CSV: Symbol,Date,Time,Open,High,Low,Close,Volume
+      var lines=text.trim().split('\n');
+      if(lines.length<2){resolve(null);return;}
+      var cols=lines[1].split(',');
+      // Close = index6
+      var close=parseFloat(cols[6]);
+      var open =parseFloat(cols[3]);
+      if(!close||close<=0||isNaN(close)){resolve(null);return;}
+      // stooqはprevCloseが取れないのでopenを代用（前日比の近似）
+      var prev=(!isNaN(open)&&open>0)?open:null;
+      resolve({price:close, prevClose:prev, source:'stooq'});
+    }).catch(function(){clearTimeout(tid);resolve(null);});
+  });
+}
+
+// ── Yahoo Finance から取得（プロキシ経由） ────────────────
+function fetchPriceYahoo(ticker,market){
   var PROXIES=[
     'https://api.allorigins.win/raw?url=',
     'https://corsproxy.io/?url=',
@@ -702,10 +763,9 @@ function fetchPrice(ticker,market){
         if(!d){res(null);return;}
         var result=d.chart&&d.chart.result&&d.chart.result[0];
         var meta=result&&result.meta;
-        // regularMarketPrice = リアルタイム/最終約定値、市場時間外は直前の終値
         var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
         var prev=meta?(meta.previousClose||meta.chartPreviousClose):null;
-        if(p&&p>0)res({price:parseFloat(p),prevClose:(prev&&prev>0)?parseFloat(prev):null});
+        if(p&&p>0)res({price:parseFloat(p),prevClose:(prev&&prev>0)?parseFloat(prev):null,source:'yahoo'});
         else res(null);
       }).catch(function(){clearTimeout(tid);res(null);});
     });
@@ -717,7 +777,6 @@ function fetchPrice(ticker,market){
         'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d',
         'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d'
       ];
-      // 全プロキシ×全ホストを一斉に投げて最速を使う
       var allUrls=[];
       PROXIES.forEach(function(px){
         yUrls.forEach(function(yu){allUrls.push(px+encodeURIComponent(yu));});
@@ -740,6 +799,18 @@ function fetchPrice(ticker,market){
     });
   }
   return trySyms(0);
+}
+
+// ── メイン取得関数（モードに応じて呼び分け） ─────────────
+function fetchPrice(ticker, market){
+  if(PRICE_SOURCE==='yahoo'){
+    return fetchPriceYahoo(ticker, market);
+  }
+  // stooqモード: stooq → 失敗したらYahoo自動フォールバック
+  return fetchPriceStooq(ticker, market).then(function(res){
+    if(res!==null) return res;
+    return fetchPriceYahoo(ticker, market);
+  });
 }
 
 function refreshPrices(){
@@ -3086,6 +3157,7 @@ function importBackup(input) {
 }
 
 function openModal(id){
+  if(id==='menuModal'){ setPriceSource(PRICE_SOURCE); }
   if(id==='tradeModal'){
     // prefillTradeを経由しない直接呼び出し時はフォームをリセット
     if(!el('t_ticker').value){
