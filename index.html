@@ -283,7 +283,10 @@ tr:active td{background:rgba(56,189,248,.05);}
       <div class="card-body"><div class="chart-wrap"><canvas id="divChart"></canvas></div></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">📋 銘柄別損益サマリー</span></div>
+      <div class="card-header" style="flex-wrap:wrap;gap:6px">
+        <span class="card-title">📋 銘柄別損益サマリー</span>
+        <div id="stockSummaryStats" style="display:flex;gap:6px;align-items:center;margin-left:auto"></div>
+      </div>
       <div style="padding:10px 12px 0">
         <input type="text" id="stockSummarySearch" placeholder="🔍 コード・銘柄名で絞り込み" oninput="renderStockSummary()" style="width:100%;padding:8px 12px;font-size:13px;border:1px solid var(--border2);border-radius:10px;background:#f8faff;color:var(--text);box-sizing:border-box">
       </div>
@@ -2214,6 +2217,19 @@ function renderStockSummary() {
   }
 
   rows.sort((a,b) => b.total - a.total);
+
+  // バッジ集計
+  const statsEl = el('stockSummaryStats');
+  if (statsEl) {
+    const total_count = rows.length;
+    const plus_count  = rows.filter(r => r.total > 0).length;
+    const minus_count = rows.filter(r => r.total < 0).length;
+    statsEl.innerHTML =
+      '<span style="font-size:11px;font-weight:700;color:var(--text3)">計</span>' +
+      '<span style="font-size:13px;font-weight:800;color:var(--text2)">' + total_count + '</span>' +
+      '<span style="font-size:11px;font-weight:700;background:rgba(22,163,74,.12);color:var(--green);border-radius:20px;padding:2px 8px">▲' + plus_count + '</span>' +
+      '<span style="font-size:11px;font-weight:700;background:rgba(220,38,38,.1);color:var(--red);border-radius:20px;padding:2px 8px">▼' + minus_count + '</span>';
+  }
 
   container.innerHTML = rows.map(r => {
     const { k, ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
