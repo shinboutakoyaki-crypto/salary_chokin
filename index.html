@@ -861,6 +861,10 @@ function refreshPrices(){
   var RETRY_MAX=2; // 失敗時の自動リトライ回数
   var failCount={};
   var done=0;
+  // 更新開始時に全銘柄をloading状態にセット
+  if(!S.fetchStatus) S.fetchStatus={};
+  priceKeys.forEach(function(pk){ S.fetchStatus[pk]='loading'; });
+  renderAll(); // ローディング表示を即時反映
   var globalTimeout=setTimeout(function(){
     btn.disabled=false;icon.classList.remove('spin');
     S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
@@ -897,6 +901,7 @@ function refreshPrices(){
           var priceVal = (typeof res==='object') ? res.price : res;
           var prevVal  = (typeof res==='object') ? res.prevClose : null;
           S.prices[pk]=priceVal;
+          S.fetchStatus[pk]='ok';
           if(prevVal) { if(!S.prevClose) S.prevClose={}; S.prevClose[pk]=prevVal; }
           done++;
           el('refreshBtn').title=done+'/'+total+'件取得済';
@@ -905,6 +910,7 @@ function refreshPrices(){
           if(failCount[pk]<=RETRY_MAX){
             retry.push(pk);
           } else {
+            S.fetchStatus[pk]='fail';
             if(finalFailed.indexOf(pk)===-1) finalFailed.push(pk);
           }
         }
@@ -1201,6 +1207,7 @@ function renderHoldings(){
 
   container.innerHTML=keys.map(k=>{
     const hd=h[k],p=S.prices[hd.priceKey]||null;
+    const fetchSt=(S.fetchStatus&&S.fetchStatus[hd.priceKey])||null;
     const cost=hd.avgCost*hd.qty,val=p?p*hd.qty:null;
     const unr=val?val-cost:null,unrP=cost>0&&unr!==null?(unr/cost)*100:null;
     const realized=hd.realizedPnl||0;
@@ -1229,7 +1236,16 @@ function renderHoldings(){
             </div>
             <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">
               <button onclick="manualPrice('${k}');event.stopPropagation()" style="padding:2px 4px;border:1px solid var(--border2);border-radius:5px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11" style="color:var(--text3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red);font-size:10px">⚠️ 取得失敗</span>`}
+              ${p && fetchSt!=='loading'
+                ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
+                : fetchSt==='loading'
+                  ? `<span style="color:var(--text3);font-size:10px">⏳ 取得中…</span>`
+                  : fetchSt==='fail'
+                    ? `<span style="color:var(--red);font-size:10px">⚠️ 取得失敗</span>`
+                    : p
+                      ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
+                      : `<span style="color:var(--text3);font-size:10px">— 未取得</span>`
+              }
               ${unrP!==null?`<span class="${unrColor}">(${pct(unrP)})</span>`:''}
             </div>
           </div>
