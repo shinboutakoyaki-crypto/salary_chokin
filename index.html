@@ -115,6 +115,12 @@ tr:active td{background:rgba(56,189,248,.05);}
 .csv-drop-sub{font-size:12px;color:var(--text3);margin-top:3px;}
 .csv-hint{background:var(--bg);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);}
 .csv-hint code{font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent);background:rgba(56,189,248,.1);padding:2px 5px;border-radius:4px;font-size:11px;}
+
+.toast-container{position:fixed;bottom:calc(68px + var(--safe-bottom) + 12px);left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+.toast{background:rgba(30,41,59,.92);color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;font-family:'Barlow','Noto Sans JP',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.25);backdrop-filter:blur(8px);white-space:nowrap;pointer-events:none;animation:toastIn .3s cubic-bezier(.34,1.56,.64,1) forwards;}
+.toast.warn{background:rgba(217,119,6,.92);}
+.toast.success{background:rgba(22,163,74,.92);}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .csv-preview{max-height:180px;overflow-y:auto;margin-top:12px;}
 .preview-row{display:flex;gap:6px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:'Barlow','Noto Sans JP',sans-serif;flex-wrap:wrap;align-items:center;}
 .preview-row:last-child{border-bottom:none;}
@@ -386,6 +392,8 @@ tr:active td{background:rgba(56,189,248,.05);}
     </div>
     <div id="calDayDetail" style="display:none"></div>
   </div>
+
+  <div class="toast-container" id="toastContainer"></div>
 
   <nav class="bottom-nav">
   <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
@@ -856,7 +864,10 @@ function refreshPrices(){
   var globalTimeout=setTimeout(function(){
     btn.disabled=false;icon.classList.remove('spin');
     S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
+    showToast('⚠️ 一部の株価取得がタイムアウトしました','warn',5000);
   },40000);
+
+  var finalFailed=[];
 
   function processChunk(remaining){
     if(remaining.length===0){
@@ -864,6 +875,14 @@ function refreshPrices(){
       S.lastUpdated=new Date().toISOString();snapPnl();save();
       btn.disabled=false;icon.classList.remove('spin');
       updateUpdated();renderAll();
+      // 結果通知
+      if(finalFailed.length===0){
+        showToast('✅ '+done+'件の株価を取得しました','success');
+      } else {
+        var failTickers=finalFailed.map(function(pk){return pk.split('_').slice(1).join('_');});
+        if(done>0) showToast('✅ '+done+'件取得済み','success',2500);
+        showToast('⚠️ 取得失敗: '+failTickers.join(', '),'warn',5000);
+      }
       return;
     }
     var chunk=remaining.slice(0,CHUNK);
@@ -883,7 +902,11 @@ function refreshPrices(){
           el('refreshBtn').title=done+'/'+total+'件取得済';
         } else {
           failCount[pk]=(failCount[pk]||0)+1;
-          if(failCount[pk]<=RETRY_MAX)retry.push(pk);
+          if(failCount[pk]<=RETRY_MAX){
+            retry.push(pk);
+          } else {
+            if(finalFailed.indexOf(pk)===-1) finalFailed.push(pk);
+          }
         }
       });
     });
@@ -896,6 +919,22 @@ function refreshPrices(){
 }
 
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+
+// ── トースト通知 ──────────────────────────────────────
+function showToast(msg, type, duration){
+  var container=el('toastContainer');
+  if(!container)return;
+  var t=document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.textContent=msg;
+  container.appendChild(t);
+  setTimeout(function(){
+    t.style.transition='opacity .3s,transform .3s';
+    t.style.opacity='0';
+    t.style.transform='translateY(10px)';
+    setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},350);
+  },duration||3500);
+}
 
 
 
@@ -1190,7 +1229,7 @@ function renderHoldings(){
             </div>
             <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">
               <button onclick="manualPrice('${k}');event.stopPropagation()" style="padding:2px 4px;border:1px solid var(--border2);border-radius:5px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11" style="color:var(--text3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red)">株価未取得</span>`}
+              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red);font-size:10px">⚠️ 取得失敗</span>`}
               ${unrP!==null?`<span class="${unrColor}">(${pct(unrP)})</span>`:''}
             </div>
           </div>
