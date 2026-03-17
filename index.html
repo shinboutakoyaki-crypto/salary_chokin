@@ -717,7 +717,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[]};
+let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{}};
 let csvImportData=null,csvDivData=null;
 
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
@@ -902,6 +902,8 @@ function refreshPrices(){
           var prevVal  = (typeof res==='object') ? res.prevClose : null;
           S.prices[pk]=priceVal;
           S.fetchStatus[pk]='ok';
+          if(!S.priceUpdatedAt) S.priceUpdatedAt={};
+          S.priceUpdatedAt[pk]=new Date().toISOString();
           if(prevVal) { if(!S.prevClose) S.prevClose={}; S.prevClose[pk]=prevVal; }
           done++;
           el('refreshBtn').title=done+'/'+total+'件取得済';
@@ -1208,6 +1210,14 @@ function renderHoldings(){
   container.innerHTML=keys.map(k=>{
     const hd=h[k],p=S.prices[hd.priceKey]||null;
     const fetchSt=(S.fetchStatus&&S.fetchStatus[hd.priceKey])||null;
+    const priceAge=(function(){
+      if(!S.priceUpdatedAt||!S.priceUpdatedAt[hd.priceKey]) return null;
+      const updAt=new Date(S.priceUpdatedAt[hd.priceKey]);
+      const now=new Date();
+      const todayStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+      const updStr=updAt.getFullYear()+'-'+String(updAt.getMonth()+1).padStart(2,'0')+'-'+String(updAt.getDate()).padStart(2,'0');
+      return updStr===todayStr ? 'today' : 'old';
+    })();
     const cost=hd.avgCost*hd.qty,val=p?p*hd.qty:null;
     const unr=val?val-cost:null,unrP=cost>0&&unr!==null?(unr/cost)*100:null;
     const realized=hd.realizedPnl||0;
@@ -1236,12 +1246,12 @@ function renderHoldings(){
             </div>
             <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">
               <button onclick="manualPrice('${k}');event.stopPropagation()" style="padding:2px 4px;border:1px solid var(--border2);border-radius:5px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11" style="color:var(--text3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              ${p && fetchSt!=='loading'
-                ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
-                : fetchSt==='loading'
-                  ? `<span style="color:var(--text3);font-size:10px">⏳ 取得中…</span>`
-                  : fetchSt==='fail'
-                    ? `<span style="color:var(--red);font-size:10px">⚠️ 取得失敗</span>`
+              ${fetchSt==='loading'
+                ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--text3);font-size:10px">⏳</span>` : `<span style="color:var(--text3);font-size:10px">⏳ 取得中…</span>`)
+                : fetchSt==='fail'
+                  ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--red);font-size:10px">⚠️ 古い</span>` : `<span style="color:var(--red);font-size:10px">⚠️ 取得失敗</span>`)
+                  : p && priceAge==='old'
+                    ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--yellow);font-size:10px">⚠️ 古い</span>`
                     : p
                       ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
                       : `<span style="color:var(--text3);font-size:10px">— 未取得</span>`
