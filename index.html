@@ -3275,6 +3275,10 @@ function manualPrice(k){
   var p=parseFloat(val.replace(/,/g,''));
   if(isNaN(p)||p<=0){alert('正しい数値を入力してください');return;}
   S.prices[pk]=p;
+  if(!S.priceUpdatedAt) S.priceUpdatedAt={};
+  S.priceUpdatedAt[pk]=new Date().toISOString();
+  if(!S.fetchStatus) S.fetchStatus={};
+  S.fetchStatus[pk]='ok';
   save();renderAll();
 }
 function resetAllData(){
