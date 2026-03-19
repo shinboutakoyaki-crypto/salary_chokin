@@ -712,7 +712,7 @@ const SK='portfoliokit_v3';
 let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{}};
 let csvImportData=null,csvDivData=null;
 
-function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
+function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){} S.fetchStatus={};}
 function save(){
   try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}
   // 取引・配当が増えたタイミングで警告チェック
