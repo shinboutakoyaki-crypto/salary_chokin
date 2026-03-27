@@ -1403,7 +1403,7 @@ function renderDividends(){
   renderBrokerFilterBar('divBrokerFilter', brokers, divBrokerFilter, 'setDivBrokerFilter');
   const filtered = divBrokerFilter === 'all' ? S.dividends : S.dividends.filter(d => (d.broker||'') === divBrokerFilter);
 
-  const sorted=[...filtered].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const sorted=[...filtered].sort((a,b)=>{ const dd=new Date(b.date)-new Date(a.date); if(dd!==0)return dd; return filtered.indexOf(b)-filtered.indexOf(a); });
   const total=filtered.reduce((s,d)=>s+d.amount,0);
   const thisYear=filtered.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
