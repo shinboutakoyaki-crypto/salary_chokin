@@ -115,6 +115,12 @@ tr:active td{background:rgba(56,189,248,.05);}
 .csv-drop-sub{font-size:12px;color:var(--text3);margin-top:3px;}
 .csv-hint{background:var(--bg);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);}
 .csv-hint code{font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent);background:rgba(56,189,248,.1);padding:2px 5px;border-radius:4px;font-size:11px;}
+
+.toast-container{position:fixed;bottom:calc(68px + var(--safe-bottom) + 12px);left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+.toast{background:rgba(30,41,59,.92);color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;font-family:'Barlow','Noto Sans JP',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.25);backdrop-filter:blur(8px);white-space:nowrap;pointer-events:none;animation:toastIn .3s cubic-bezier(.34,1.56,.64,1) forwards;}
+.toast.warn{background:rgba(217,119,6,.92);}
+.toast.success{background:rgba(22,163,74,.92);}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .csv-preview{max-height:180px;overflow-y:auto;margin-top:12px;}
 .preview-row{display:flex;gap:6px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:'Barlow','Noto Sans JP',sans-serif;flex-wrap:wrap;align-items:center;}
 .preview-row:last-child{border-bottom:none;}
@@ -263,6 +269,18 @@ tr:active td{background:rgba(56,189,248,.05);}
           <span style="font-size:18px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:#dc2626;white-space:nowrap" id="pnlSummaryValue">¥0</span>
         </div>
       </div>
+      <!-- 総資産額テキスト表示 -->
+      <div id="assetSummaryBar" style="padding:4px 16px 0">
+        <div style="padding:10px 14px;background:rgba(29,111,232,.06);border-radius:10px;border:1px solid rgba(29,111,232,.12)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-size:11px;color:var(--text3);font-weight:600">総資産（現在）</span>
+            <span id="assetSummaryValue" style="font-size:22px;font-weight:800;color:var(--accent);font-family:'Barlow','Noto Sans JP',sans-serif">¥—</span>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:2px">
+            <span id="assetDayChange" style="font-size:12px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif"></span>
+          </div>
+        </div>
+      </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
     </div>
     <div class="card">
@@ -387,6 +405,8 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div id="calDayDetail" style="display:none"></div>
   </div>
 
+  <div class="toast-container" id="toastContainer"></div>
+
   <nav class="bottom-nav">
   <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -440,20 +460,6 @@ tr:active td{background:rgba(56,189,248,.05);}
     </div>
     <button class="btn btn-primary" style="width:100%;margin-top:8px;padding:9px" onclick="addIncomeAssetFromMenu()">＋ 登録</button>
   </div>
-</div>
-<div style="border-top:1px solid var(--border);margin:4px 0"></div>
-<!-- 株価取得ソース切替 -->
-<div style="border:1px solid var(--border2);border-radius:12px;padding:12px 14px">
-  <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.5px">📡 株価取得ソース</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-    <button id="psBtn_stooq" onclick="setPriceSource('stooq')" style="padding:8px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid var(--accent);cursor:pointer;font-family:inherit;transition:all .15s">
-      stooq<br><span style="font-size:10px;font-weight:400">推奨・高安定</span>
-    </button>
-    <button id="psBtn_yahoo" onclick="setPriceSource('yahoo')" style="padding:8px;font-size:12px;font-weight:700;border-radius:8px;border:1.5px solid var(--accent);cursor:pointer;font-family:inherit;background:transparent;color:var(--accent);transition:all .15s">
-      Yahoo Finance<br><span style="font-size:10px;font-weight:400">旧来・プロキシ経由</span>
-    </button>
-  </div>
-  <div style="font-size:10px;color:var(--text3);margin-top:7px">stooqは失敗時にYahooへ自動切替します</div>
 </div>
 <div style="border-top:1px solid var(--border);margin:4px 0"></div>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
@@ -709,10 +715,10 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[]};
+let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{}};
 let csvImportData=null,csvDivData=null;
 
-function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){}}
+function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){} S.fetchStatus={};}
 function save(){
   try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}
   // 取引・配当が増えたタイミングで警告チェック
@@ -720,51 +726,9 @@ function save(){
 }
 
 // ── 株価取得モード設定 ──────────────────────────────
-// 'stooq'  : stooq優先 → 失敗時にYahoo Financeへ自動フォールバック（デフォルト）
-// 'yahoo'  : Yahoo Finance（旧来）のみ
-var PRICE_SOURCE = (function(){
-  try{ return localStorage.getItem('priceSource')||'stooq'; }catch(e){ return 'stooq'; }
-})();
-function setPriceSource(src){
-  PRICE_SOURCE=src;
-  try{ localStorage.setItem('priceSource',src); }catch(e){}
-  // メニュー内のボタン見た目を更新
-  ['stooq','yahoo'].forEach(function(s){
-    var b=el('psBtn_'+s);
-    if(!b)return;
-    b.style.background=s===src?'var(--accent)':'transparent';
-    b.style.color=s===src?'#fff':'var(--accent)';
-  });
-}
 
-// ── stooq から取得（CORSフリー・CSV形式） ────────────────
-function fetchPriceStooq(ticker, market){
-  // stooqシンボル: 日本株→ "7203.jp"、米国株→ "aapl.us"
-  var sym = market==='JP' ? ticker+'.jp' : ticker.toLowerCase()+'.us';
-  var url = 'https://stooq.com/q/l/?s='+sym+'&f=sd2t2ohlcv&h&e=csv';
-  return new Promise(function(resolve){
-    var ctrl=new AbortController();
-    var tid=setTimeout(function(){ctrl.abort();resolve(null);},7000);
-    fetch(url,{signal:ctrl.signal}).then(function(r){
-      clearTimeout(tid);
-      if(!r.ok){resolve(null);return null;}
-      return r.text();
-    }).then(function(text){
-      if(!text){resolve(null);return;}
-      // CSV: Symbol,Date,Time,Open,High,Low,Close,Volume
-      var lines=text.trim().split('\n');
-      if(lines.length<2){resolve(null);return;}
-      var cols=lines[1].split(',');
-      // Close = index6
-      var close=parseFloat(cols[6]);
-      var open =parseFloat(cols[3]);
-      if(!close||close<=0||isNaN(close)){resolve(null);return;}
-      // stooqはprevCloseが取れないのでopenを代用（前日比の近似）
-      var prev=(!isNaN(open)&&open>0)?open:null;
-      resolve({price:close, prevClose:prev, source:'stooq'});
-    }).catch(function(){clearTimeout(tid);resolve(null);});
-  });
-}
+// 'yahoo'  : Yahoo Finance（旧来）のみ
+// Yahoo Finance固定
 
 // ── Yahoo Finance から取得（プロキシ経由） ────────────────
 function fetchPriceYahoo(ticker,market){
@@ -824,16 +788,9 @@ function fetchPriceYahoo(ticker,market){
   return trySyms(0);
 }
 
-// ── メイン取得関数（モードに応じて呼び分け） ─────────────
+// ── メイン取得関数（Yahoo固定） ─────────────
 function fetchPrice(ticker, market){
-  if(PRICE_SOURCE==='yahoo'){
-    return fetchPriceYahoo(ticker, market);
-  }
-  // stooqモード: stooq → 失敗したらYahoo自動フォールバック
-  return fetchPriceStooq(ticker, market).then(function(res){
-    if(res!==null) return res;
-    return fetchPriceYahoo(ticker, market);
-  });
+  return fetchPriceYahoo(ticker, market);
 }
 
 function refreshPrices(){
@@ -853,10 +810,21 @@ function refreshPrices(){
   var RETRY_MAX=2; // 失敗時の自動リトライ回数
   var failCount={};
   var done=0;
+  // 更新開始時に全銘柄をloading状態にセット
+  if(!S.fetchStatus) S.fetchStatus={};
+  priceKeys.forEach(function(pk){ S.fetchStatus[pk]='loading'; });
+  renderAll(); // ローディング表示を即時反映
   var globalTimeout=setTimeout(function(){
+    // loading状態のまま残ってる銘柄をfailに変える
+    priceKeys.forEach(function(pk){
+      if(S.fetchStatus[pk]==='loading') S.fetchStatus[pk]='fail';
+    });
     btn.disabled=false;icon.classList.remove('spin');
     S.lastUpdated=new Date().toISOString();save();updateUpdated();renderAll();
+    showToast('⚠️ 一部の株価取得がタイムアウトしました','warn',5000);
   },40000);
+
+  var finalFailed=[];
 
   function processChunk(remaining){
     if(remaining.length===0){
@@ -864,6 +832,14 @@ function refreshPrices(){
       S.lastUpdated=new Date().toISOString();snapPnl();save();
       btn.disabled=false;icon.classList.remove('spin');
       updateUpdated();renderAll();
+      // 結果通知
+      if(finalFailed.length===0){
+        showToast('✅ '+done+'件の株価を取得しました','success');
+      } else {
+        var failTickers=finalFailed.map(function(pk){return pk.split('_').slice(1).join('_');});
+        if(done>0) showToast('✅ '+done+'件取得済み','success',2500);
+        showToast('⚠️ 取得失敗: '+failTickers.join(', '),'warn',5000);
+      }
       return;
     }
     var chunk=remaining.slice(0,CHUNK);
@@ -878,12 +854,20 @@ function refreshPrices(){
           var priceVal = (typeof res==='object') ? res.price : res;
           var prevVal  = (typeof res==='object') ? res.prevClose : null;
           S.prices[pk]=priceVal;
+          S.fetchStatus[pk]='ok';
+          if(!S.priceUpdatedAt) S.priceUpdatedAt={};
+          S.priceUpdatedAt[pk]=new Date().toISOString();
           if(prevVal) { if(!S.prevClose) S.prevClose={}; S.prevClose[pk]=prevVal; }
           done++;
           el('refreshBtn').title=done+'/'+total+'件取得済';
         } else {
           failCount[pk]=(failCount[pk]||0)+1;
-          if(failCount[pk]<=RETRY_MAX)retry.push(pk);
+          if(failCount[pk]<=RETRY_MAX){
+            retry.push(pk);
+          } else {
+            S.fetchStatus[pk]='fail';
+            if(finalFailed.indexOf(pk)===-1) finalFailed.push(pk);
+          }
         }
       });
     });
@@ -896,6 +880,22 @@ function refreshPrices(){
 }
 
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+
+// ── トースト通知 ──────────────────────────────────────
+function showToast(msg, type, duration){
+  var container=el('toastContainer');
+  if(!container)return;
+  var t=document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.textContent=msg;
+  container.appendChild(t);
+  setTimeout(function(){
+    t.style.transition='opacity .3s,transform .3s';
+    t.style.opacity='0';
+    t.style.transform='translateY(10px)';
+    setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},350);
+  },duration||3500);
+}
 
 
 
@@ -1089,6 +1089,26 @@ function renderHoldings(){
   }
   const totalUnr = totalVal - totalCostH;
   const totalUnrP = totalCostH > 0 ? (totalUnr / totalCostH) * 100 : 0;
+  // 総資産サマリーバー更新
+  const assetSumEl = el('assetSummaryValue');
+  if (assetSumEl && totalVal > 0) assetSumEl.textContent = '¥' + Math.round(totalVal).toLocaleString();
+  // 前日比（ポートフォリオ全体）
+  const assetDayEl = el('assetDayChange');
+  if (assetDayEl) {
+    let totalDayChange = 0, hasDod = false;
+    for (const k of keys) {
+      const hd = h[k];
+      const dod = getDodForTicker(hd.priceKey);
+      if (dod) { totalDayChange += dod.change * hd.qty; hasDod = true; }
+    }
+    if (hasDod) {
+      const sign = totalDayChange >= 0 ? '+' : '';
+      assetDayEl.textContent = '前日比 ' + sign + '¥' + Math.round(totalDayChange).toLocaleString();
+      assetDayEl.style.color = totalDayChange >= 0 ? 'var(--green)' : 'var(--red)';
+    } else {
+      assetDayEl.textContent = '';
+    }
+  }
   const valEl = el('holdingsValTotal'), costEl = el('holdingsCostTotal');
   const unrEl = el('holdingsUnrTotal'), unrPctEl = el('holdingsUnrPct');
   if (valEl) valEl.textContent = '¥' + Math.round(totalVal).toLocaleString();
@@ -1160,15 +1180,24 @@ function renderHoldings(){
   const divByTicker={};
   for(const d of S.dividends){const pk=d.market+'_'+d.ticker;divByTicker[pk]=(divByTicker[pk]||0)+d.amount;}
 
-  // デフォルト順は後登録が上（配列を逆順に）
-  if(holdingsSort.key==='none') keys.reverse();
   container.innerHTML=keys.map(k=>{
     const hd=h[k],p=S.prices[hd.priceKey]||null;
+    const fetchSt=(S.fetchStatus&&S.fetchStatus[hd.priceKey])||null;
+    const priceAge=(function(){
+      if(!S.priceUpdatedAt||!S.priceUpdatedAt[hd.priceKey]) return null;
+      const updAt=new Date(S.priceUpdatedAt[hd.priceKey]);
+      const now=new Date();
+      const todayStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+      const updStr=updAt.getFullYear()+'-'+String(updAt.getMonth()+1).padStart(2,'0')+'-'+String(updAt.getDate()).padStart(2,'0');
+      return updStr===todayStr ? 'today' : 'old';
+    })();
     const cost=hd.avgCost*hd.qty,val=p?p*hd.qty:null;
     const unr=val?val-cost:null,unrP=cost>0&&unr!==null?(unr/cost)*100:null;
     const realized=hd.realizedPnl||0;
     const dividend=divByTicker[hd.priceKey]||0;
     const total=unr!==null?unr+realized+dividend:realized+dividend;
+    const dod=getDodForTicker(hd.priceKey); // 前日比
+    const dayChange=dod?Math.round(dod.change*hd.qty):null; // 保有株数×前日比
     // 現在利回り・取得利回り（1株配当がアラートに設定されてれば使う）
     const alertItem=S.alerts.find(a=>a.market===hd.market&&a.ticker===hd.ticker);
     const dps=alertItem?.dps||null;
@@ -1178,7 +1207,6 @@ function renderHoldings(){
 
     const unrColor=unr!==null?clr(unr):'neutral';
     const totalColor=clr(total);
-    const dod = getDodForTicker(hd.priceKey);
 
     return `<div class="holding-card" id="hcard_${k}">
       <div class="holding-card-header" onclick="toggleHoldingCard('${k}')">
@@ -1192,13 +1220,23 @@ function renderHoldings(){
             </div>
             <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">
               <button onclick="manualPrice('${k}');event.stopPropagation()" style="padding:2px 4px;border:1px solid var(--border2);border-radius:5px;background:transparent;cursor:pointer;display:inline-flex;align-items:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11" style="color:var(--text3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              ${p?`現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`:`<span style="color:var(--red)">株価未取得</span>`}
+              ${fetchSt==='loading'
+                ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--text3);font-size:10px">⏳</span>` : `<span style="color:var(--text3);font-size:10px">⏳ 取得中…</span>`)
+                : fetchSt==='fail'
+                  ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--red);font-size:10px">⚠️ 古い</span>` : `<span style="color:var(--red);font-size:10px">⚠️ 取得失敗</span>`)
+                  : p && priceAge==='old'
+                    ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--yellow);font-size:10px">⚠️ 古い</span>`
+                    : p
+                      ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
+                      : `<span style="color:var(--text3);font-size:10px">— 未取得</span>`
+              }
               ${unrP!==null?`<span class="${unrColor}">(${pct(unrP)})</span>`:''}
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;min-width:90px">
             <div style="font-size:10px;color:var(--text3);margin-bottom:1px">含み損益</div>
             <div class="mono ${unrColor}" style="font-size:15px;font-weight:700;white-space:nowrap">${unr!==null?(unr>=0?'+':'-')+'¥'+Math.abs(Math.round(unr)).toLocaleString():'—'}</div>
+            ${dayChange!==null?`<div class="mono" style="font-size:11px;font-weight:600;white-space:nowrap;color:${dayChange>=0?'var(--green)':'var(--red)'}">${dayChange>=0?'▲':'▼'}前日比 ${dayChange>=0?'+':''}${dayChange.toLocaleString()}円</div>`:''}
           </div>
         </div>
       </div>
@@ -1288,8 +1326,7 @@ function renderTrades(){
 
   var _sq=el('tradesSearch');var q=_sq?_sq.value.trim().toLowerCase():'';
   // 登録順（新しく登録したものが上）＝配列の逆順
-  var all=[...S.trades].map(function(t,i){return Object.assign({},t,{_i:i});});
-  all.sort(function(a,b){ var dd=new Date(b.date)-new Date(a.date); return dd!==0?dd:b._i-a._i; });
+  var all=[...S.trades].reverse();
   if (tradesBrokerFilter !== 'all') all = all.filter(t => t.memo === tradesBrokerFilter);
   var sorted=q?all.filter(function(t){return (t.ticker||'').toLowerCase().indexOf(q)>=0||(t.name||'').toLowerCase().indexOf(q)>=0;}):all;
   const tbody=el('tradesBody');
@@ -1366,7 +1403,7 @@ function renderDividends(){
   renderBrokerFilterBar('divBrokerFilter', brokers, divBrokerFilter, 'setDivBrokerFilter');
   const filtered = divBrokerFilter === 'all' ? S.dividends : S.dividends.filter(d => (d.broker||'') === divBrokerFilter);
 
-  const sorted=[...filtered].map((d,i)=>({...d,_i:i})).sort((a,b)=>{ const dd=new Date(b.date)-new Date(a.date); return dd!==0?dd:b._i-a._i; });
+  const sorted=[...filtered].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const total=filtered.reduce((s,d)=>s+d.amount,0);
   const thisYear=filtered.filter(d=>d.date.startsWith(new Date().getFullYear().toString())).reduce((s,d)=>s+d.amount,0);
   el('divSummary').innerHTML=`
@@ -3213,6 +3250,10 @@ function manualPrice(k){
   var p=parseFloat(val.replace(/,/g,''));
   if(isNaN(p)||p<=0){alert('正しい数値を入力してください');return;}
   S.prices[pk]=p;
+  if(!S.priceUpdatedAt) S.priceUpdatedAt={};
+  S.priceUpdatedAt[pk]=new Date().toISOString();
+  if(!S.fetchStatus) S.fetchStatus={};
+  S.fetchStatus[pk]='ok';
   save();renderAll();
 }
 function resetAllData(){
@@ -3305,7 +3346,7 @@ function importBackup(input) {
 }
 
 function openModal(id){
-  if(id==='menuModal'){ setPriceSource(PRICE_SOURCE); }
+  if(id==='menuModal'){ }
   if(id==='tradeModal'){
     // prefillTradeを経由しない直接呼び出し時はフォームをリセット
     if(!el('t_ticker').value){
@@ -3542,6 +3583,14 @@ requestAnimationFrame(function(){
     setTimeout(checkBackupWarning, 1000); // 1秒後にバックアップ警告チェック
   }, 0);
 });
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./service-worker.js');
+  });
+}
 </script>
 </body>
 </html>
