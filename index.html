@@ -2188,6 +2188,13 @@ function renderStockSummary() {
   const h = computeHoldings();
   const container = el('stockSummaryGrid');
 
+  // broker込みで配当を集計
+  const divByBrokerTicker = {};
+  for (const d of S.dividends) {
+    const bk = (d.broker||'')+'__'+d.market+'_'+d.ticker;
+    divByBrokerTicker[bk] = (divByBrokerTicker[bk]||0) + d.amount;
+  }
+  // priceKeyのみ版（後方互換用）
   const divByTicker = {};
   for (const d of S.dividends) {
     const k = d.market+'_'+d.ticker;
@@ -2201,13 +2208,12 @@ function renderStockSummary() {
   const incomeKeys = [];
   if (S.incomeAssets && S.incomeAssets.length) {
     for (const ia of S.incomeAssets) {
-      const k = '__'+(ia.market||'JP')+'_'+ia.ticker;
-      if (!brokerTradeKeys.includes(k)) incomeKeys.push(k);
+      const bk2 = '__'+(ia.market||'JP')+'_'+ia.ticker;
+      if (!brokerTradeKeys.includes(bk2)) incomeKeys.push(bk2);
     }
   }
-  for (const k of Object.keys(divByTicker)) {
-    const bk = '__'+k;
-    if (!brokerTradeKeys.includes(bk) && !incomeKeys.includes(bk)) incomeKeys.push(bk);
+  for (const bk2 of Object.keys(divByBrokerTicker)) {
+    if (!brokerTradeKeys.includes(bk2) && !incomeKeys.includes(bk2)) incomeKeys.push(bk2);
   }
 
   const allKeys = [...brokerTradeKeys, ...incomeKeys];
@@ -2247,7 +2253,7 @@ function renderStockSummary() {
     const price = S.prices[k] || null;
     const unrealized = qty > 0 && price ? (price - avgCost) * qty : 0;
     const realized = realizedPnl || 0;
-    const dividend = divByTicker[k] || 0;
+    const dividend = divByBrokerTicker[bk] !== undefined ? divByBrokerTicker[bk] : (divByTicker[k] || 0);
     const total = unrealized + realized + dividend;
     const isHolding = qty > 0;
     const isIncomeOnly = incomeKeys.includes(bk) && !brokerTradeKeys.includes(bk);
