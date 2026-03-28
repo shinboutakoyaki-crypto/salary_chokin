@@ -2194,43 +2194,38 @@ function renderStockSummary() {
     divByTicker[k] = (divByTicker[k]||0) + d.amount;
   }
 
-  // 取引銘柄（broker情報も含める）
-  const tradeKeys = [...new Set(S.trades.map(t => priceKey(t.market,t.ticker)))];
+  // broker+priceKeyでユニークなキーを作成（口座別に分ける）
+  const brokerTradeKeys = [...new Set(S.trades.map(t => (t.memo||'')+'__'+priceKey(t.market,t.ticker)))];
 
   // インカム銘柄（取引なし・配当のみ）も追加
   const incomeKeys = [];
   if (S.incomeAssets && S.incomeAssets.length) {
     for (const ia of S.incomeAssets) {
-      const k = (ia.market||'JP')+'_'+ia.ticker;
-      if (!tradeKeys.includes(k)) incomeKeys.push(k);
+      const k = '__'+(ia.market||'JP')+'_'+ia.ticker;
+      if (!brokerTradeKeys.includes(k)) incomeKeys.push(k);
     }
   }
-  // 配当のみのデータがある銘柄も追加
   for (const k of Object.keys(divByTicker)) {
-    if (!tradeKeys.includes(k) && !incomeKeys.includes(k)) incomeKeys.push(k);
+    const bk = '__'+k;
+    if (!brokerTradeKeys.includes(bk) && !incomeKeys.includes(bk)) incomeKeys.push(bk);
   }
 
-  const allKeys = [...tradeKeys, ...incomeKeys];
+  const allKeys = [...brokerTradeKeys, ...incomeKeys];
   if (!allKeys.length) {
     container.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>データがありません</div>';
     return;
   }
 
-  // 各銘柄の証券会社を取引データから取得
-  const brokerByKey = {};
-  for (const t of S.trades) {
-    const k = priceKey(t.market, t.ticker);
-    if (!brokerByKey[k] && t.memo) brokerByKey[k] = t.memo;
-  }
-
   // 証券会社フィルターバー
-  const allBrokers = [...new Set(Object.values(brokerByKey).filter(Boolean))].sort();
+  const allBrokers = [...new Set(S.trades.map(t => t.memo).filter(Boolean))].sort();
   renderBrokerFilterBar('stockSummaryBrokerFilter', allBrokers, stockSummaryBrokerFilter, 'setStockSummaryBrokerFilter');
 
   const searchQ = (el('stockSummarySearch')?.value || '').trim().toLowerCase();
 
-  let rows = allKeys.map(k => {
-    const hdList = Object.values(h).filter(x => x.priceKey === k);
+  let rows = allKeys.map(bk => {
+    const [broker, ...pkParts] = bk.split('__');
+    const k = pkParts.join('__');
+    const hdList = Object.values(h).filter(x => x.priceKey === k && (x.broker||'') === broker);
     const qty = hdList.reduce((s,x) => s+x.qty, 0);
     const totalCost = hdList.reduce((s,x) => s+x.avgCost*x.qty, 0);
     const avgCost = qty > 0 ? totalCost/qty : 0;
@@ -2255,10 +2250,9 @@ function renderStockSummary() {
     const dividend = divByTicker[k] || 0;
     const total = unrealized + realized + dividend;
     const isHolding = qty > 0;
-    const broker = brokerByKey[k] || '';
-    const isIncomeOnly = incomeKeys.includes(k) && !tradeKeys.includes(k);
+    const isIncomeOnly = incomeKeys.includes(bk) && !brokerTradeKeys.includes(bk);
 
-    return { k, ticker, market, name: firstName, qty, avgCost, unrealized, realized, dividend, total, isHolding, price, broker, isIncomeOnly };
+    return { k, bk, ticker, market, name: firstName, qty, avgCost, unrealized, realized, dividend, total, isHolding, price, broker, isIncomeOnly };
   });
 
   // 証券会社フィルター
@@ -2318,12 +2312,12 @@ function renderStockSummary() {
   }
 
   container.innerHTML = rows.map(r => {
-    const { k, ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
+    const { k, bk, ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
     const tc = clr(total);
     const uc = clr(unrealized);
     const rc = clr(realized);
     const unrPct = qty > 0 && price && avgCost > 0 ? ((price - avgCost) / avgCost * 100) : null;
-    const safeK = k.replace(/[^a-zA-Z0-9_]/g,'_');
+    const safeK = (bk||k).replace(/[^a-zA-Z0-9_]/g,'_');
 
     return `<div style="background:var(--bg);border-radius:12px;border:1px solid var(--border);overflow:hidden">
       <div style="padding:12px 14px;cursor:pointer" onclick="toggleStockHistory('${safeK}')">
