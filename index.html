@@ -2317,13 +2317,15 @@ function renderStockSummary() {
       '<span style="font-size:11px;font-weight:700;background:rgba(220,38,38,.1);color:var(--red);border-radius:20px;padding:2px 8px">▼' + minus_count + '</span>';
   }
 
-  container.innerHTML = rows.map(r => {
+  // rowsをwindow._stockSummaryRowsに保存してindexで参照
+  window._stockSummaryRows = rows;
+  container.innerHTML = rows.map((r, rowIdx) => {
     const { k, bk, ticker, market, name, unrealized, realized, dividend, total, isHolding, price, avgCost, qty, broker, isIncomeOnly } = r;
     const tc = clr(total);
     const uc = clr(unrealized);
     const rc = clr(realized);
     const unrPct = qty > 0 && price && avgCost > 0 ? ((price - avgCost) / avgCost * 100) : null;
-    const safeK = (bk||k).replace(/[^a-zA-Z0-9_]/g,'_');
+    const safeK = String(rowIdx);
 
     return `<div style="background:var(--bg);border-radius:12px;border:1px solid var(--border);overflow:hidden">
       <div style="padding:12px 14px;cursor:pointer" onclick="toggleStockHistory('${safeK}')">
@@ -2377,23 +2379,17 @@ function toggleStockHistory(safeK) {
     if (hint) hint.textContent = '▼ 履歴を見る';
     return;
   }
-  // safeK = "broker__priceKey" 形式をデコード
-  // safeKはbk（broker+'__'+priceKey）をsafe化したもの
-  // broker部分とpriceKey部分に分割して取引・配当を絞り込む
-  const safeKParts = safeK.split('__');
-  const safeBroker = safeKParts[0];
-  const safePK = safeKParts.slice(1).join('__');
+  // rowIndexからbroker・priceKeyを復元
+  const rowData = window._stockSummaryRows && window._stockSummaryRows[parseInt(safeK)];
+  if (!rowData) return;
+  const { k: rowK, broker: rowBroker } = rowData;
   // 取引履歴（この銘柄・この口座）
   const trades = S.trades.filter(t => {
-    const tPK = priceKey(t.market, t.ticker).replace(/[^a-zA-Z0-9_]/g,'_');
-    const tBroker = (t.memo||'').replace(/[^a-zA-Z0-9_]/g,'_');
-    return tPK === safePK && tBroker === safeBroker;
+    return priceKey(t.market, t.ticker) === rowK && (t.memo||'') === rowBroker;
   });
   // 配当履歴（この銘柄・この口座）
   const divs = S.dividends.filter(d => {
-    const dPK = (d.market+'_'+d.ticker).replace(/[^a-zA-Z0-9_]/g,'_');
-    const dBroker = (d.broker||'').replace(/[^a-zA-Z0-9_]/g,'_');
-    return dPK === safePK && dBroker === safeBroker;
+    return (d.market+'_'+d.ticker) === rowK && (d.broker||'') === rowBroker;
   });
 
   // 取引＋配当を日付順（登録順）でまとめる
