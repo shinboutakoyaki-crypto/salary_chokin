@@ -2377,12 +2377,24 @@ function toggleStockHistory(safeK) {
     if (hint) hint.textContent = '▼ 履歴を見る';
     return;
   }
-  // safeK → 元のpriceKey（JP_7203 形式）を復元
-  const pk = safeK.replace(/__/g, '_'); // 変換: JP_7203__broker → JP_7203 には不要だが念のため
-  // 取引履歴（この銘柄）
-  const trades = S.trades.filter(t => priceKey(t.market, t.ticker).replace(/[^a-zA-Z0-9_]/g,'_') === safeK);
-  // 配当履歴（この銘柄）
-  const divs = S.dividends.filter(d => (d.market+'_'+d.ticker).replace(/[^a-zA-Z0-9_]/g,'_') === safeK);
+  // safeK = "broker__priceKey" 形式をデコード
+  // safeKはbk（broker+'__'+priceKey）をsafe化したもの
+  // broker部分とpriceKey部分に分割して取引・配当を絞り込む
+  const safeKParts = safeK.split('__');
+  const safeBroker = safeKParts[0];
+  const safePK = safeKParts.slice(1).join('__');
+  // 取引履歴（この銘柄・この口座）
+  const trades = S.trades.filter(t => {
+    const tPK = priceKey(t.market, t.ticker).replace(/[^a-zA-Z0-9_]/g,'_');
+    const tBroker = (t.memo||'').replace(/[^a-zA-Z0-9_]/g,'_');
+    return tPK === safePK && tBroker === safeBroker;
+  });
+  // 配当履歴（この銘柄・この口座）
+  const divs = S.dividends.filter(d => {
+    const dPK = (d.market+'_'+d.ticker).replace(/[^a-zA-Z0-9_]/g,'_');
+    const dBroker = (d.broker||'').replace(/[^a-zA-Z0-9_]/g,'_');
+    return dPK === safePK && dBroker === safeBroker;
+  });
 
   // 取引＋配当を日付順（登録順）でまとめる
   const items = [
