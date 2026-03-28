@@ -169,7 +169,11 @@ tr:active td{background:rgba(56,189,248,.05);}
 .amounts-hidden #holdingsValTotal,
 .amounts-hidden #holdingsCostTotal,
 .amounts-hidden #holdingsUnrTotal,
-.amounts-hidden #holdingsUnrPct {
+.amounts-hidden #holdingsUnrPct,
+.amounts-hidden #assetSummaryValue,
+.amounts-hidden #assetDayChange,
+.amounts-hidden #divYearTotalValue,
+.amounts-hidden #divMonthDetailTotal {
   filter: blur(8px);
   user-select: none;
   transition: filter .2s;
@@ -299,6 +303,15 @@ tr:active td{background:rgba(56,189,248,.05);}
         </div>
       </div>
       <div class="card-body"><div class="chart-wrap"><canvas id="divChart"></canvas></div></div>
+      <!-- 月別配当明細 -->
+      <div id="divMonthDetail" style="display:none;padding:0 14px 14px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;padding-top:10px;border-top:1px solid var(--border)" id="divMonthDetailLabel">3月の配当明細</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text3)">合計</span>
+          <span id="divMonthDetailTotal" style="font-size:15px;font-weight:700;color:var(--accent);font-family:'Barlow','Noto Sans JP',sans-serif">¥0</span>
+        </div>
+        <div id="divMonthDetailList"></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-header" style="flex-wrap:wrap;gap:6px">
@@ -1455,6 +1468,7 @@ let charts={};
 let assetMode='asset'; // 'asset' or 'pnl'
 let divMode='monthly'; // 'monthly' or 'cumulative'
 let divYear=new Date().getFullYear();
+let currentDivYear=divYear;
 
 let linePeriod = 'monthly';
 let lineMonth = ''; // renderLineChart内で初期化
@@ -1960,6 +1974,7 @@ function renderLineChart() {
 }
 function setDivYear(y){
   divYear=y;
+  currentDivYear=y;
   updateDivYearBtns();
   renderDivChart();
 }
@@ -2382,6 +2397,33 @@ function fmtMan(v){
   if(v>=1000) return (v/1000).toFixed(1)+'千';
   return v+'円';
 }
+function showDivMonthDetail(year, month) {
+  const monthStr = year + '-' + String(month).padStart(2, '0');
+  const divs = (S.dividends || []).filter(d => d.date && d.date.startsWith(monthStr));
+  const detailEl = el('divMonthDetail');
+  const labelEl = el('divMonthDetailLabel');
+  const totalEl = el('divMonthDetailTotal');
+  const listEl = el('divMonthDetailList');
+  if (!detailEl) return;
+  if (!divs.length) {
+    detailEl.style.display = 'none';
+    return;
+  }
+  const total = divs.reduce((s, d) => s + d.amount, 0);
+  labelEl.textContent = month + '月の配当明細';
+  totalEl.textContent = '¥' + Math.round(total).toLocaleString();
+  listEl.innerHTML = divs.sort((a,b) => b.amount - a.amount).map(d => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(29,111,232,.04);border-radius:8px;margin-bottom:5px">
+      <div>
+        <span style="font-size:12px;font-weight:700;color:var(--accent)">${d.ticker}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:6px">${(d.name||'').slice(0,10)}</span>
+      </div>
+      <span class="mono" style="font-size:13px;font-weight:700;color:var(--green)">+¥${Math.round(d.amount).toLocaleString()}</span>
+    </div>
+  `).join('');
+  detailEl.style.display = 'block';
+}
+
 function renderDivChart() {
   killChart('div');
   updateDivYearBtns();
@@ -2425,6 +2467,11 @@ function renderDivChart() {
         }]
       },
       options:{...cOpts,
+        onClick: function(evt, elements) {
+          if (!elements.length) return;
+          const monthIdx = elements[0].index + 1;
+          showDivMonthDetail(currentDivYear, monthIdx);
+        },
         plugins:{
           legend:{display:false},
           datalabels:{display:false}
