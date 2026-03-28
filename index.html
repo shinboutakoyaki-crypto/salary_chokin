@@ -173,6 +173,8 @@ tr:active td{background:rgba(56,189,248,.05);}
 .amounts-hidden #assetSummaryValue,
 .amounts-hidden #assetDayChange,
 .amounts-hidden #divYearTotalValue,
+.amounts-hidden #stockSummaryTotalValue,
+.amounts-hidden #stockSummaryTotalBreakdown,
 .amounts-hidden #divMonthDetailTotal {
   filter: blur(8px);
   user-select: none;
@@ -322,6 +324,12 @@ tr:active td{background:rgba(56,189,248,.05);}
         <input type="text" id="stockSummarySearch" placeholder="🔍 コード・銘柄名で絞り込み" oninput="renderStockSummary()" style="width:100%;padding:8px 12px;font-size:13px;border:1px solid var(--border2);border-radius:10px;background:#f8faff;color:var(--text);box-sizing:border-box">
       </div>
       <div id="stockSummaryBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 0"></div>
+      <!-- 口座別総合損益バー -->
+      <div id="stockSummaryTotalBar" style="display:none;margin:8px 12px 0;padding:10px 14px;background:rgba(29,111,232,.06);border-radius:10px;border:1px solid rgba(29,111,232,.12)">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px" id="stockSummaryTotalLabel">全口座 総合損益</div>
+        <div style="font-size:22px;font-weight:800;font-family:'Barlow','Noto Sans JP',sans-serif" id="stockSummaryTotalValue">¥0</div>
+        <div style="display:flex;gap:10px;margin-top:4px;font-size:11px;color:var(--text3)" id="stockSummaryTotalBreakdown"></div>
+      </div>
       <div id="stockSummaryGrid" style="padding:12px;display:flex;flex-direction:column;gap:10px"></div>
     </div>
   </div>
@@ -2264,6 +2272,29 @@ function renderStockSummary() {
       r.ticker.toLowerCase().includes(searchQ) ||
       (r.name||'').toLowerCase().includes(searchQ)
     );
+  }
+
+  // 口座別総合損益バー更新
+  const totalBar = el('stockSummaryTotalBar');
+  const totalLbl = el('stockSummaryTotalLabel');
+  const totalVal = el('stockSummaryTotalValue');
+  const totalBreak = el('stockSummaryTotalBreakdown');
+  if (totalBar && rows.length) {
+    const sumUnr = rows.reduce((s,r) => s + r.unrealized, 0);
+    const sumReal = rows.reduce((s,r) => s + r.realized, 0);
+    const sumDiv = rows.reduce((s,r) => s + r.dividend, 0);
+    const sumTotal = sumUnr + sumReal + sumDiv;
+    const brokerLabel = stockSummaryBrokerFilter === 'all' ? '全口座' : stockSummaryBrokerFilter;
+    totalLbl.textContent = brokerLabel + ' 総合損益';
+    totalVal.textContent = (sumTotal >= 0 ? '+' : '') + '¥' + Math.round(sumTotal).toLocaleString();
+    totalVal.style.color = sumTotal >= 0 ? 'var(--green)' : 'var(--red)';
+    totalBreak.innerHTML =
+      '<span>含み ' + (sumUnr>=0?'+':'') + '¥' + Math.round(sumUnr).toLocaleString() + '</span>' +
+      '<span>実現 ' + (sumReal>=0?'+':'') + '¥' + Math.round(sumReal).toLocaleString() + '</span>' +
+      '<span style="color:var(--yellow)">配当 ¥' + Math.round(sumDiv).toLocaleString() + '</span>';
+    totalBar.style.display = 'block';
+  } else if (totalBar) {
+    totalBar.style.display = 'none';
   }
 
   if (!rows.length) {
