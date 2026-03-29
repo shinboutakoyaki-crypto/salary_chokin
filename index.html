@@ -817,6 +817,8 @@ function fetchPrice(ticker, market){
 function refreshPrices(){
   var btn=el('refreshBtn'),icon=el('refreshIcon');
   btn.disabled=true;icon.classList.add('spin');
+  // 更新のたびにprevCloseをリセット（古いキャッシュを使わないように）
+  S.prevClose={};
   var h=computeHoldings();
   var allKeys=Object.keys(h);
   var keys=allKeys.filter(function(k){return h[k].qty>0;});
@@ -2042,6 +2044,9 @@ function setPieMode(mode) {
 
 // 銘柄の前日比を返す {change, changePct} or null
 function getDodForTicker(priceKey) {
+  // 土日は市場が休みなので前日比を表示しない
+  const dow = new Date().getDay();
+  if (dow === 0 || dow === 6) return null;
   const cur = S.prices[priceKey];
   if (!cur) return null;
   // S.prevClose（当日取得）があれば優先、なければpriceHistoryから前日を探す
