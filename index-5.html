@@ -3726,6 +3726,16 @@ requestAnimationFrame(function(){
     setTimeout(checkBackupWarning, 1000); // 1秒後にバックアップ警告チェック
   }, 0);
 });
+
+// バックグラウンドから復帰時に画面を再描画してタッチ固まりを防ぐ
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible'){
+    requestAnimationFrame(function(){
+      document.body.style.opacity = '0.99';
+      setTimeout(function(){ document.body.style.opacity = '1'; }, 50);
+    });
+  }
+});
 </script>
 
 <script>
