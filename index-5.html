@@ -2247,11 +2247,8 @@ function renderStockSummary() {
   if (S.incomeAssets && S.incomeAssets.length) {
     for (const ia of S.incomeAssets) {
       const bk2 = '__'+(ia.market||'JP')+'_'+ia.ticker;
-      if (!brokerTradeKeys.includes(bk2)) incomeKeys.push(bk2);
+      if (!brokerTradeKeys.includes(bk2) && !incomeKeys.includes(bk2)) incomeKeys.push(bk2);
     }
-  }
-  for (const bk2 of Object.keys(divByBrokerTicker)) {
-    if (!brokerTradeKeys.includes(bk2) && !incomeKeys.includes(bk2)) incomeKeys.push(bk2);
   }
 
   const allKeys = [...brokerTradeKeys, ...incomeKeys];
