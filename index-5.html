@@ -2558,7 +2558,7 @@ function renderDivChart() {
         },
         scales:{
           x:{ticks:{color:'#334155',font:{size:12}}},
-          y:{ticks:{color:'#64748b',callback:function(v){return '***円';}},grid:{color:'rgba(29,111,232,.08)'}}
+          y:{ticks:{color:'#64748b',callback:function(v){return _amountsHidden?'***円':fmtMan(v);}},grid:{color:'rgba(29,111,232,.08)'}}
         }
       }
     });
@@ -2584,7 +2584,7 @@ function renderDivChart() {
       options:{...cOpts,
         scales:{
           x:{ticks:{color:'#64748b',maxRotation:0,maxTicksLimit:10}},
-          y:{ticks:{color:'#64748b',callback:function(v){return '***円';}},grid:{color:'rgba(29,111,232,.08)'}}
+          y:{ticks:{color:'#64748b',callback:function(v){return _amountsHidden?'***円':fmtMan(v);}},grid:{color:'rgba(29,111,232,.08)'}}
         }
       }
     });
@@ -3713,6 +3713,7 @@ function toggleHideAmounts() {
   }
   // グラフのY軸も再描画
   renderLineChart();
+  renderDivChart();
 }
 
 const el=id=>document.getElementById(id);
