@@ -899,6 +899,7 @@ function refreshPrices(){
           } else {
             S.fetchStatus[pk]='fail';
             if(finalFailed.indexOf(pk)===-1) finalFailed.push(pk);
+            renderHoldings(); // 失敗確定した銘柄を即座に⚠️表示
           }
         }
       });
