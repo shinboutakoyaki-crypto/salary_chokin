@@ -745,7 +745,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{}};
+let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{},manualPriceTickers:[]};
 let csvImportData=null,csvDivData=null;
 
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){} S.fetchStatus={};}
@@ -833,6 +833,12 @@ function refreshPrices(){
   var keys=allKeys.filter(function(k){return h[k].qty>0;});
   // holdingKeyからpriceKey（market_ticker）の一意リストを作成
   var priceKeys=[...new Set(keys.map(function(k){var hd=h[k];return hd.priceKey;}))];
+  // 手動管理銘柄を除外
+  if(S.manualPriceTickers&&S.manualPriceTickers.length){
+    priceKeys=priceKeys.filter(function(pk){return S.manualPriceTickers.indexOf(pk)<0;});
+    // 手動管理銘柄のfetchStatusをmanualに設定
+    S.manualPriceTickers.forEach(function(pk){ if(!S.fetchStatus)S.fetchStatus={}; S.fetchStatus[pk]='manual'; });
+  }
   var total=priceKeys.length;
   if(total===0){
     btn.disabled=false;icon.classList.remove('spin');
@@ -1259,11 +1265,13 @@ function renderHoldings(){
                 ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--text3);font-size:10px">⏳</span>` : `<span style="color:var(--text3);font-size:10px">⏳ 取得中…</span>`)
                 : fetchSt==='fail'
                   ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--yellow);font-size:10px">⚠️ 手動入力を</span>` : `<span style="color:var(--yellow);font-size:10px">⚠️ 手動入力してください</span>`)
-                  : p && priceAge==='old'
-                    ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--yellow);font-size:10px">⚠️ 古い</span>`
-                    : p
-                      ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
-                      : `<span style="color:var(--text3);font-size:10px">— 未取得</span>`
+                  : fetchSt==='manual'
+                    ? (p ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--yellow);font-size:10px">⚠️ 手動管理</span>` : `<span style="color:var(--yellow);font-size:10px">⚠️ 手動入力してください</span>`)
+                    : p && priceAge==='old'
+                      ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span> <span style="color:var(--yellow);font-size:10px">⚠️ 古い</span>`
+                      : p
+                        ? `現在値 <span style="color:var(--text2);font-weight:600">${fmtV(p,hd.market)}</span>`
+                        : `<span style="color:var(--text3);font-size:10px">— 未取得</span>`
               }
               ${unrP!==null?`<span class="${unrColor}">(${pct(unrP)})</span>`:''}
             </div>
@@ -1326,6 +1334,7 @@ function renderHoldings(){
           </div>
           <div style="margin-top:10px">
             <button class="btn btn-sm" style="font-size:10px;padding:5px 10px;width:100%;background:${hd.account==='nisa'?'rgba(22,163,74,.15)':hd.account==='tokutei'?'rgba(29,111,232,.15)':'rgba(100,116,139,.12)'};color:${hd.account==='nisa'?'#16a34a':hd.account==='tokutei'?'#1d6fe8':'var(--text3)'};border:1px solid currentColor;border-radius:8px;margin-bottom:8px" onclick="openAccountModal('${k}');event.stopPropagation()">${hd.account==='nisa'?'🌱 新NISA':hd.account==='tokutei'?'📋 特定口座':'📝 一般/未設定'}　✏️ 口座変更</button>
+            ${(()=>{const isManual=S.manualPriceTickers&&S.manualPriceTickers.indexOf(hd.priceKey)>=0;return `<button class="btn btn-sm" style="font-size:10px;padding:5px 10px;width:100%;background:${isManual?'rgba(217,119,6,.15)':'rgba(148,163,184,.1)'};color:${isManual?'#d97706':'var(--text3)'};border:1px solid currentColor;border-radius:8px;margin-bottom:8px" onclick="toggleManualPrice('${hd.priceKey}');event.stopPropagation()">${isManual?'🔒 手動管理中（タップで解除）':'🔓 自動取得（タップで手動管理に変更）'}</button>`;})()}
           </div>
           <div style="display:flex;gap:8px;margin-top:2px">
             <button class="btn btn-outlined btn-sm" style="flex:1;justify-content:center" onclick="prefillTrade('${hd.ticker}','${hd.market}','${hd.name.replace(/'/g,'')}');event.stopPropagation()">追加購入</button>
@@ -3335,9 +3344,29 @@ function manualPrice(k){
   if(!S.priceUpdatedAt) S.priceUpdatedAt={};
   S.priceUpdatedAt[pk]=new Date().toISOString();
   if(!S.fetchStatus) S.fetchStatus={};
-  S.fetchStatus[pk]='ok'; // 手動入力したらok扱いでマーク消す
+  if(S.manualPriceTickers&&S.manualPriceTickers.indexOf(pk)>=0){
+    S.fetchStatus[pk]='manual';
+  } else {
+    S.fetchStatus[pk]='ok';
+  }
   save();renderAll();
 }
+function toggleManualPrice(pk){
+  if(!S.manualPriceTickers) S.manualPriceTickers=[];
+  const idx=S.manualPriceTickers.indexOf(pk);
+  if(idx>=0){
+    S.manualPriceTickers.splice(idx,1);
+    if(S.fetchStatus) S.fetchStatus[pk]='ok';
+    showToast('自動取得に戻しました','success');
+  } else {
+    S.manualPriceTickers.push(pk);
+    if(!S.fetchStatus) S.fetchStatus={};
+    S.fetchStatus[pk]='manual';
+    showToast('手動管理に設定しました','warn');
+  }
+  save();renderAll();
+}
+
 function resetAllData(){
   if(!confirm('⚠️ 全ての取引・配当・アラートデータを削除します。\nバックアップは取りましたか？'))return;
   if(!confirm('本当に削除しますか？この操作は元に戻せません。'))return;
