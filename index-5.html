@@ -454,6 +454,8 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <!-- ACCOUNT MODAL -->
 <div class="modal-overlay" id="menuModal"><div class="modal" style="max-width:340px"><div class="modal-header"><h2 class="modal-title">⚙️ メニュー</h2></div><div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+<button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openMonthlyReport()"><span style="font-size:18px">📊</span> 月次レポート</button>
+<div style="border-top:1px solid var(--border);margin:4px 0"></div>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvModal')"><span style="font-size:18px">📥</span> 取引CSV読込</button>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openModal('csvDivModal')"><span style="font-size:18px">💰</span> 配当CSV読込</button>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');openSplitModal()"><span style="font-size:18px">✂️</span> 株式分割</button>
@@ -655,6 +657,15 @@ tr:active td{background:rgba(56,189,248,.05);}
 </div>
 
 <!-- STOCK SPLIT MODAL -->
+
+<!-- 月次レポートモーダル -->
+<div class="modal-overlay" id="monthlyReportModal">
+  <div class="modal" style="max-width:400px;background:#f0f5ff">
+    <div class="modal-handle"></div>
+    <div id="monthlyReportContent" style="padding:0 0 16px"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="splitModal">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -3443,6 +3454,241 @@ function manualPrice(k){
   }
   save();renderAll();
 }
+
+// ─── 月次レポート ───────────────────────────────────────
+let reportYear = new Date().getFullYear();
+let reportMonth = new Date().getMonth() + 1;
+
+function openMonthlyReport() {
+  reportYear = new Date().getFullYear();
+  reportMonth = new Date().getMonth() + 1;
+  renderMonthlyReport();
+  openModal('monthlyReportModal');
+}
+
+function shiftReportMonth(dir) {
+  reportMonth += dir;
+  if (reportMonth > 12) { reportMonth = 1; reportYear++; }
+  if (reportMonth < 1)  { reportMonth = 12; reportYear--; }
+  renderMonthlyReport();
+}
+
+function renderMonthlyReport() {
+  const ym = reportYear + '-' + String(reportMonth).padStart(2, '0');
+  const ymLabel = reportYear + '年' + reportMonth + '月';
+
+  // pnlHistoryから当月データ
+  const monthSnaps = (S.pnlHistory||[]).filter(p => p.date && p.date.startsWith(ym))
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  // 月初・月末の評価額
+  const h = computeHoldings();
+  const currentTotalCost = Object.values(h).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
+  const evalOf = snap => (snap.totalCost !== undefined ? snap.totalCost : currentTotalCost) + (snap.unrealized||0);
+
+  const currentAsset = monthSnaps.length ? evalOf(monthSnaps[monthSnaps.length-1]) : null;
+  const firstAsset   = monthSnaps.length ? evalOf(monthSnaps[0]) : null;
+  const monthPnl     = (currentAsset !== null && firstAsset !== null) ? currentAsset - firstAsset : null;
+  const monthPnlPct  = (monthPnl !== null && firstAsset > 0) ? (monthPnl / firstAsset * 100) : null;
+  const dayAvg       = (monthPnl !== null && monthSnaps.length > 0) ? monthPnl / monthSnaps.length : null;
+
+  // 勝ち負け日数（前日比）
+  let winDays = 0, loseDays = 0;
+  for (let i = 1; i < monthSnaps.length; i++) {
+    const diff = evalOf(monthSnaps[i]) - evalOf(monthSnaps[i-1]);
+    if (diff > 0) winDays++;
+    else if (diff < 0) loseDays++;
+  }
+  const totalDays = winDays + loseDays;
+  const winRate = totalDays > 0 ? Math.round(winDays / totalDays * 100) : null;
+
+  // 当月配当
+  const monthDiv = (S.dividends||[])
+    .filter(d => d.date && d.date.startsWith(ym))
+    .reduce((s,d) => s + (d.amount||0), 0);
+
+  // 含み益・含み損トップ3
+  const holdings = Object.values(h).filter(hd => hd.qty > 0);
+  const withPnl = holdings.map(hd => {
+    const p = S.prices[hd.priceKey] || null;
+    const unr = p ? (p - hd.avgCost) * hd.qty : null;
+    return { ...hd, unr };
+  }).filter(hd => hd.unr !== null);
+  const topGain = [...withPnl].sort((a,b) => b.unr - a.unr).slice(0, 3);
+  const topLoss = [...withPnl].sort((a,b) => a.unr - b.unr).slice(0, 3).filter(h => h.unr < 0);
+
+  // チャートデータ（日別資産推移）
+  const chartLabels = monthSnaps.map(p => parseInt(p.date.split('-')[2]) + '日');
+  const chartData   = monthSnaps.map(p => evalOf(p));
+
+  // TOPIX当月データ
+  const topixMonthData = (S.topixHistory||[]).filter(t => t.date && t.date.startsWith(ym))
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  const pnlColor  = monthPnl === null ? '#64748b' : monthPnl >= 0 ? '#16a34a' : '#dc2626';
+  const pnlSign   = monthPnl === null ? '' : monthPnl >= 0 ? '+' : '';
+  const pnlStr    = monthPnl === null ? '—' : pnlSign + '¥' + Math.round(Math.abs(monthPnl)).toLocaleString();
+  const pnlPctStr = monthPnlPct === null ? '' : '(' + (monthPnlPct >= 0 ? '+' : '') + monthPnlPct.toFixed(2) + '%)';
+  const dayAvgStr = dayAvg === null ? '—' : (dayAvg >= 0 ? '+' : '') + '¥' + Math.round(Math.abs(dayAvg)).toLocaleString();
+
+  // 勝率ドーナツ描画用
+  const winAngle  = totalDays > 0 ? (winDays / totalDays) * 360 : 0;
+
+  const html = `
+    <div style="background:linear-gradient(135deg,#1d6fe8,#1558c0);padding:16px 18px 14px;border-radius:0 0 0 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.7);letter-spacing:.05em">📊 月次レポート</div>
+        <button onclick="closeModal('monthlyReportModal')" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:26px;height:26px;border-radius:50%;font-size:14px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="shiftReportMonth(-1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;cursor:pointer">‹</button>
+        <div style="font-size:20px;font-weight:900;color:#fff;font-family:'Barlow','Noto Sans JP',sans-serif">${ymLabel}</div>
+        <button onclick="shiftReportMonth(1)" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;cursor:pointer">›</button>
+      </div>
+    </div>
+
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+
+      <!-- 総資産・月初来損益 -->
+      <div style="background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08);display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:4px">総資産（現在）</div>
+          <div style="font-size:20px;font-weight:900;color:#1d6fe8;font-family:'Barlow','Noto Sans JP',sans-serif">${currentAsset !== null ? '¥'+Math.round(currentAsset).toLocaleString() : '—'}</div>
+          <div style="margin-top:6px">
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:2px">月初来損益</div>
+            <div style="font-size:16px;font-weight:800;color:${pnlColor};font-family:'Barlow','Noto Sans JP',sans-serif">${pnlStr} <span style="font-size:11px;font-weight:600">${pnlPctStr}</span></div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:2px">1日あたり <span style="color:${pnlColor};font-weight:700">${dayAvgStr}</span></div>
+          </div>
+        </div>
+        <!-- 勝率ドーナツ -->
+        <div style="text-align:center;flex-shrink:0">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r="28" fill="none" stroke="#e2e8f0" stroke-width="10"/>
+            ${winRate !== null && totalDays > 0 ? `
+            <circle cx="36" cy="36" r="28" fill="none" stroke="#1d6fe8" stroke-width="10"
+              stroke-dasharray="${(winDays/totalDays*175.9).toFixed(1)} 175.9"
+              stroke-linecap="round"
+              transform="rotate(-90 36 36)"/>
+            ` : ''}
+            <text x="36" y="33" text-anchor="middle" font-size="14" font-weight="900" fill="${winRate!==null?'#1d6fe8':'#94a3b8'}" font-family="Barlow,sans-serif">${winRate !== null ? winRate+'%' : '—'}</text>
+            <text x="36" y="46" text-anchor="middle" font-size="8" fill="#94a3b8">勝率</text>
+          </svg>
+          <div style="font-size:9px;color:#94a3b8;margin-top:-4px">
+            ${totalDays > 0 ? `▲${winDays}日 ▼${loseDays}日` : 'データなし'}
+          </div>
+        </div>
+      </div>
+
+      <!-- 配当受取 -->
+      ${monthDiv > 0 ? `
+      <div style="background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;font-weight:700;color:#64748b">💴 今月の配当受取</div>
+        <div style="font-size:18px;font-weight:800;color:#d97706;font-family:'Barlow','Noto Sans JP',sans-serif">+¥${Math.round(monthDiv).toLocaleString()}</div>
+      </div>` : ''}
+
+      <!-- 資産推移チャート -->
+      ${chartData.length >= 2 ? `
+      <div style="background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08)">
+        <div style="font-size:10px;font-weight:700;color:#94a3b8;margin-bottom:8px">資産推移</div>
+        <canvas id="reportChart" height="100"></canvas>
+      </div>` : ''}
+
+      <!-- 含み益トップ3 -->
+      ${topGain.length > 0 ? `
+      <div style="background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08)">
+        <div style="font-size:10px;font-weight:700;color:#16a34a;margin-bottom:8px">📈 含み益 トップ${topGain.length}</div>
+        ${topGain.map((hd,i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;${i<topGain.length-1?'border-bottom:1px solid #f1f5f9':''}">
+            <div style="font-size:12px;font-weight:700;color:#1e293b">${hd.ticker} <span style="font-size:10px;color:#94a3b8;font-weight:400">${(hd.name||'').slice(0,8)}</span></div>
+            <div style="font-size:13px;font-weight:800;color:#16a34a;font-family:'Barlow','Noto Sans JP',sans-serif">+¥${Math.round(hd.unr).toLocaleString()}</div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <!-- 含み損トップ3 -->
+      ${topLoss.length > 0 ? `
+      <div style="background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08)">
+        <div style="font-size:10px;font-weight:700;color:#dc2626;margin-bottom:8px">📉 含み損 トップ${topLoss.length}</div>
+        ${topLoss.map((hd,i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;${i<topLoss.length-1?'border-bottom:1px solid #f1f5f9':''}">
+            <div style="font-size:12px;font-weight:700;color:#1e293b">${hd.ticker} <span style="font-size:10px;color:#94a3b8;font-weight:400">${(hd.name||'').slice(0,8)}</span></div>
+            <div style="font-size:13px;font-weight:800;color:#dc2626;font-family:'Barlow','Noto Sans JP',sans-serif">-¥${Math.round(Math.abs(hd.unr)).toLocaleString()}</div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      ${monthSnaps.length === 0 ? `
+      <div style="text-align:center;padding:24px;color:#94a3b8;font-size:13px">この月のデータがありません<br><small>更新ボタンを押すとデータが蓄積されます</small></div>
+      ` : ''}
+
+    </div>
+  `;
+
+  el('monthlyReportContent').innerHTML = html;
+
+  // チャート描画
+  if (chartData.length >= 2) {
+    setTimeout(() => {
+      const ctx = el('reportChart');
+      if (!ctx) return;
+      if (window._reportChart) { window._reportChart.destroy(); }
+
+      const datasets = [{
+        label: '総資産',
+        data: chartData,
+        borderColor: '#1d6fe8',
+        backgroundColor: 'rgba(29,111,232,.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+        spanGaps: true,
+        yAxisID: 'y'
+      }];
+
+      if (topixMonthData.length >= 2) {
+        datasets.push({
+          label: 'TOPIX(1306)',
+          data: topixMonthData.map(t => t.price),
+          borderColor: 'rgba(148,163,184,.7)',
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 1.5,
+          borderDash: [4,3],
+          spanGaps: true,
+          yAxisID: 'y2'
+        });
+      }
+
+      const vals = chartData.filter(v=>v!==null);
+      const yMin = Math.floor(Math.min(...vals)*0.999/10000)*10000;
+      const yMax = Math.ceil(Math.max(...vals)*1.001/10000)*10000;
+      const tVals = topixMonthData.map(t=>t.price);
+      const tMin = tVals.length ? Math.floor(Math.min(...tVals)*0.998/10)*10 : 0;
+      const tMax = tVals.length ? Math.ceil(Math.max(...tVals)*1.002/10)*10 : 100;
+
+      window._reportChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: chartLabels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: topixMonthData.length>=2, labels:{color:'#94a3b8',font:{size:9},boxWidth:16,padding:8} },
+            tooltip: { callbacks: { label: c => c.dataset.yAxisID==='y2' ? 'TOPIX: ¥'+Math.round(c.raw).toLocaleString() : '¥'+Math.round(c.raw).toLocaleString() } }
+          },
+          scales: {
+            x: { ticks:{color:'#94a3b8',font:{size:9},maxRotation:0,maxTicksLimit:8}, grid:{display:false} },
+            y: { min:yMin, max:yMax, position:'left', ticks:{color:'#94a3b8',font:{size:9},callback:v=>(v/10000).toFixed(0)+'万',maxTicksLimit:4}, grid:{color:'rgba(148,163,184,.1)'} },
+            ...(topixMonthData.length>=2 ? {y2:{min:tMin,max:tMax,position:'right',ticks:{color:'rgba(148,163,184,.5)',font:{size:8},maxTicksLimit:4},grid:{display:false}}} : {})
+          }
+        }
+      });
+    }, 100);
+  }
+}
+
 function toggleManualPrice(pk){
   if(!S.manualPriceTickers) S.manualPriceTickers=[];
   const idx=S.manualPriceTickers.indexOf(pk);
