@@ -3447,11 +3447,8 @@ function manualPrice(k){
   if(!S.priceUpdatedAt) S.priceUpdatedAt={};
   S.priceUpdatedAt[pk]=new Date().toISOString();
   if(!S.fetchStatus) S.fetchStatus={};
-  if(S.manualPriceTickers&&S.manualPriceTickers.indexOf(pk)>=0){
-    S.fetchStatus[pk]='manual';
-  } else {
-    S.fetchStatus[pk]='ok';
-  }
+  // 手動入力したら常にokでマーク消す（更新ボタンで手動管理に戻る）
+  S.fetchStatus[pk]='ok';
   save();renderAll();
 }
 
