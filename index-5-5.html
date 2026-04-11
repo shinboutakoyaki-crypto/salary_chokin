@@ -37,9 +37,9 @@ body{font-family:'Barlow','Noto Sans JP',sans-serif;background:var(--bg);color:v
 .refresh-btn:disabled{opacity:.5;}
 
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--border);box-shadow:0 -1px 8px rgba(29,111,232,.08);display:flex;padding-bottom:var(--safe-bottom);}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 4px 8px;gap:3px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:10px;font-weight:500;font-family:inherit;transition:color .2s;position:relative;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 2px 6px;gap:2px;border:none;background:none;cursor:pointer;color:var(--text3);font-size:9px;font-weight:500;font-family:inherit;transition:color .2s;position:relative;}
 .nav-item.active{color:var(--accent);}
-.nav-item svg{width:22px;height:22px;stroke-width:1.8;}
+.nav-item svg{width:20px;height:20px;stroke-width:1.8;}
 .nav-dot{position:absolute;top:8px;right:calc(50% - 14px);width:6px;height:6px;background:var(--red);border-radius:50%;display:none;}
 .nav-dot.visible{display:block;}
 
@@ -214,6 +214,13 @@ tr:active td{background:rgba(56,189,248,.05);}
 <div class="main">
   <div id="tab-dashboard" class="tab-content active">
     
+    <!-- アセットフィルターバー -->
+    <div style="display:flex;gap:6px;margin-bottom:12px;padding:2px">
+      <button id="af_all" onclick="setAssetFilter('all')" style="flex:1;padding:7px 4px;font-size:12px;font-weight:700;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:all .15s">📊 全て</button>
+      <button id="af_stock" onclick="setAssetFilter('stock')" style="flex:1;padding:7px 4px;font-size:12px;font-weight:700;border-radius:10px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s">📈 個別株</button>
+      <button id="af_fund" onclick="setAssetFilter('fund')" style="flex:1;padding:7px 4px;font-size:12px;font-weight:700;border-radius:10px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s">🏦 投資信託</button>
+    </div>
+
     <div id="summaryGrid" class="summary-grid"></div>
     <div class="card">
       <div class="card-header">
@@ -399,6 +406,34 @@ tr:active td{background:rgba(56,189,248,.05);}
     <div id="dividendsBody"></div>
   </div>
 
+
+  <!-- 投資信託タブ -->
+  <div id="tab-funds" class="tab-content">
+    <div class="section-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="section-title">投資信託</div>
+        <span id="fundsCount" style="font-size:12px;font-weight:700;background:var(--accent);color:#fff;border-radius:20px;padding:2px 9px;line-height:1.6"></span>
+      </div>
+      <button class="add-fab" onclick="openFundModal()" style="width:42px;height:42px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <!-- サマリー -->
+    <div id="fundSummaryGrid" class="summary-grid" style="margin-bottom:12px"></div>
+    <!-- 証券会社フィルター -->
+    <div id="fundBrokerFilter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <!-- 保有ファンドカード一覧 -->
+    <div id="fundHoldingsCards" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px"></div>
+    <!-- 積立履歴 -->
+    <div class="card">
+      <div class="card-header" style="flex-wrap:wrap;gap:6px">
+        <span class="card-title">📋 積立履歴</span>
+        <input type="text" id="fundHistorySearch" placeholder="🔍 絞り込み" oninput="renderFundHistory()" style="padding:5px 10px;font-size:12px;border:1px solid var(--border2);border-radius:8px;background:#f8faff;color:var(--text);flex:1;min-width:120px">
+      </div>
+      <div id="fundHistoryBody" style="padding:0 12px 12px"></div>
+    </div>
+  </div>
+
   <div id="tab-calendar" class="tab-content">
     <div class="section-header">
       <div class="section-title">収支カレンダー</div>
@@ -447,6 +482,10 @@ tr:active td{background:rgba(56,189,248,.05);}
   <button class="nav-item" data-tab="dividends" onclick="switchTab('dividends')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
     配当
+  </button>
+  <button class="nav-item" data-tab="funds" onclick="switchTab('funds')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    投信
   </button>
   <button class="nav-item" data-tab="calendar" onclick="switchTab('calendar')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -660,6 +699,52 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <!-- STOCK SPLIT MODAL -->
 
+<!-- 投資信託 入力モーダル -->
+<div class="modal-overlay" id="fundModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title" id="fundModalTitle">📈 投資信託 積立入力</div><button class="modal-close" onclick="closeModal('fundModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">日付 *</label><input type="date" id="f_date" class="form-input"></div>
+        <div class="form-group"><label class="form-label">種別 *</label>
+          <select id="f_type" class="form-select">
+            <option value="buy">📥 積立・購入</option>
+            <option value="sell">📤 解約・売却</option>
+          </select>
+        </div>
+        <div class="form-group full"><label class="form-label">ファンドコード / 略称 *</label><input type="text" id="f_code" class="form-input" placeholder="例: eMAXIS / 0331418A" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="form-group full"><label class="form-label">ファンド名 *</label><input type="text" id="f_name" class="form-input" placeholder="例: eMAXIS Slim 全世界株式"></div>
+        <div class="form-group"><label class="form-label">基準価額（円）*</label><input type="number" id="f_nav" class="form-input" placeholder="12345" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">口数 *</label><input type="number" id="f_units" class="form-input" placeholder="12345" inputmode="numeric" oninput="calcFundAmount()"></div>
+        <div class="form-group full"><label class="form-label">積立金額（円）</label><input type="number" id="f_amount" class="form-input" placeholder="自動計算" inputmode="numeric" oninput="calcFundUnits()"></div>
+        <div class="form-group full">
+          <label class="form-label">証券会社</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="fb_rakuten" onclick="selectFundBroker('楽天証券')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🔴 楽天証券</button>
+            <button type="button" id="fb_sbi" onclick="selectFundBroker('SBI証券')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🔵 SBI証券</button>
+            <button type="button" id="fb_matsui" onclick="selectFundBroker('松井証券')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🟢 松井証券</button>
+            <button type="button" id="fb_other" onclick="selectFundBroker('')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">— なし</button>
+          </div>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">口座種別</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="fa_nisa" onclick="selectFundAccount('nisa')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🌱 つみたてNISA / 新NISA</button>
+            <button type="button" id="fa_ideco" onclick="selectFundAccount('ideco')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">🏛️ iDeCo</button>
+            <button type="button" id="fa_tokutei" onclick="selectFundAccount('tokutei')" class="btn btn-outlined btn-sm" style="font-size:12px;padding:7px 12px">📋 特定口座</button>
+          </div>
+        </div>
+        <div class="form-group full"><label class="form-label">メモ</label><input type="text" id="f_memo" class="form-input" placeholder="積立設定など"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('fundModal')">キャンセル</button>
+        <button class="btn btn-primary" id="fundSaveBtn" onclick="saveFund()">💾 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 月次レポートモーダル -->
 <div class="modal-overlay" id="monthlyReportModal">
   <div class="modal" style="max-width:420px;background:#f0f5ff;display:flex;flex-direction:column;overflow:hidden;max-height:92dvh;max-height:92vh">
@@ -758,7 +843,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{},manualPriceTickers:[],topixHistory:[]};
+let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{},manualPriceTickers:[],topixHistory:[],funds:[]};
 let csvImportData=null,csvDivData=null;
 
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){} S.fetchStatus={};}
@@ -1022,6 +1107,50 @@ let holdingsBrokerFilter = 'all';
 let holdingsSort = { key: 'none', dir: 1 }; // key: none/unr/unrP/dod/dodP, dir: 1=降順 -1=昇順
 let tradesBrokerFilter = 'all';
 
+// ── アセットフィルター: 'all' | 'stock' | 'fund' ──
+let assetFilter = 'all';
+function setAssetFilter(f) {
+  assetFilter = f;
+  ['all','stock','fund'].forEach(k => {
+    const b = el('af_'+k);
+    if (!b) return;
+    b.style.background = f===k ? 'var(--accent)' : 'transparent';
+    b.style.color = f===k ? '#fff' : 'var(--text2)';
+    b.style.borderColor = f===k ? 'var(--accent)' : 'var(--border2)';
+  });
+  renderAll();
+}
+
+// ── 投資信託 保有計算 ──
+function computeFundHoldings() {
+  if (!S.funds || !S.funds.length) return {};
+  const map = {};
+  const sorted = [...S.funds].sort((a,b) => new Date(a.date)-new Date(b.date));
+  for (const t of sorted) {
+    const k = (t.broker||'') + '__' + t.code;
+    if (!map[k]) map[k] = { code:t.code, name:t.name||t.code, broker:t.broker||'', account:t.account||'', units:0, totalCost:0, avgCostPer10k:0, realizedPnl:0, latestNav:0 };
+    const hd = map[k];
+    if (t.type === 'buy') {
+      hd.totalCost += t.amount;
+      hd.units += t.units;
+      hd.avgCostPer10k = hd.units > 0 ? (hd.totalCost / hd.units * 10000) : 0;
+      if (t.nav) hd.latestNav = t.nav;
+    } else {
+      const nav = t.nav || hd.latestNav || 0;
+      const pnl = (nav - hd.avgCostPer10k) / 10000 * t.units - (t.fee||0);
+      t.realizedPnl = pnl;
+      hd.realizedPnl += pnl;
+      hd.units = Math.max(0, hd.units - t.units);
+      if (hd.units <= 0) { hd.units = 0; hd.totalCost = 0; hd.avgCostPer10k = 0; }
+      else { hd.totalCost = hd.units * hd.avgCostPer10k / 10000; }
+    }
+  }
+  return map;
+}
+function fundNav(code) { return S.prices['FUND_'+code] || 0; }
+function fundEval(hd) { const nav = fundNav(hd.code) || hd.latestNav || 0; return hd.units * nav / 10000; }
+function fundUnr(hd)  { const val = fundEval(hd); return val > 0 ? val - hd.totalCost : 0; }
+
 function getBrokers(items, key) {
   const set = new Set();
   items.forEach(t => { if (t[key]) set.add(t[key]); });
@@ -1079,6 +1208,10 @@ function renderAll(){
           renderIncomeSection(); _rendered.income = true;
           requestAnimationFrame(function(){
             renderCharts(); _rendered.charts = true;
+            // 投信タブが開いていれば再描画
+            if (document.querySelector('[data-tab="funds"]')?.classList.contains('active')) {
+              renderFundTab();
+            }
           });
         });
       });
@@ -1087,29 +1220,63 @@ function renderAll(){
 }
 
 function renderSummary(){
+  const isAll   = assetFilter==='all';
+  const isStock = assetFilter==='stock' || isAll;
+  const isFund  = assetFilter==='fund'  || isAll;
+
+  // ── 個別株 ──
   const h=computeHoldings();
   let tC=0,tV=0,tR=0;
-  for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||hd.avgCost;tC+=hd.avgCost*hd.qty;tV+=p*hd.qty;tR+=hd.realizedPnl;}
-  const unr=tV-tC,unrP=tC>0?(unr/tC)*100:0;
-  // 税引後計算（新NISAは非課税、特定・一般は20.315%）
-  let tR_after=0;
-  for(const k in h){
-    const hd=h[k];
-    const rate=taxRate(hd.account);
-    const pnl=hd.realizedPnl||0;
-    tR_after+=pnl>0?pnl*(1-rate):pnl;
+  if (isStock) {
+    for(const k in h){const hd=h[k],p=S.prices[hd.priceKey]||hd.avgCost;tC+=hd.avgCost*hd.qty;tV+=p*hd.qty;tR+=hd.realizedPnl;}
   }
+  let tR_after=0;
+  if (isStock) {
+    for(const k in h){
+      const hd=h[k];
+      const rate=taxRate(hd.account);
+      const pnl=hd.realizedPnl||0;
+      tR_after+=pnl>0?pnl*(1-rate):pnl;
+    }
+  }
+
+  // ── 投資信託 ──
+  let fC=0,fV=0,fR=0;
+  if (isFund) {
+    const fh=computeFundHoldings();
+    for(const k in fh){
+      const hd=fh[k];
+      const nav=fundNav(hd.code)||hd.latestNav||0;
+      fC+=hd.totalCost;
+      fV+=hd.units*nav/10000;
+      fR+=hd.realizedPnl||0;
+    }
+  }
+
+  const allC=tC+fC, allV=tV+fV, allR=tR+fR;
+  const unr=allV-allC, unrP=allC>0?(unr/allC)*100:0;
+
   const tDivOnly=S.dividends.reduce((s,d)=>d.type==='yutai'?s:s+d.amount,0);
   const tYutai=S.dividends.reduce((s,d)=>d.type==='yutai'?s+d.amount:s,0);
-  const tDiv=tDivOnly+tYutai; // 合計（配当+優待）
-  const tRwithDiv = tR_after + tDiv;
-  const tot=unr+tR+tDiv;
+  const tDiv=isStock?tDivOnly+tYutai:0; // 配当は個別株のみ
+  const tRwithDiv = tR_after + fR + tDiv;
+  const tot=unr+(tR+fR)+tDiv;
+
+  const modeLabel = isAll?'全資産':(assetFilter==='stock'?'個別株':'投資信託');
+
   el('summaryGrid').innerHTML=`
-    <div class="summary-card wide"><div class="s-label">評価額合計</div><div class="s-value accent-c">${fmtJP(tV)}</div><div class="s-sub">取得額 ${fmtJP(tC)}</div></div>
+    <div class="summary-card wide">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div class="s-label">評価額合計</div>
+        <span style="font-size:10px;font-weight:700;background:${isAll?'rgba(29,111,232,.12)':assetFilter==='stock'?'rgba(22,163,74,.12)':'rgba(124,58,237,.12)'};color:${isAll?'var(--accent)':assetFilter==='stock'?'var(--green)':'#7c3aed'};border-radius:20px;padding:2px 8px">${modeLabel}</span>
+      </div>
+      <div class="s-value accent-c">${fmtJP(allV)}</div>
+      <div class="s-sub">元本合計 ${fmtJP(allC)}${isAll?' (株 '+fmtJP(tV)+' / 投信 '+fmtJP(fV)+')':''}</div>
+    </div>
     <div class="summary-card"><div class="s-label">含み損益</div><div class="s-value sm ${clr(unr)}">${sign(unr)}${fmtJP(unr)}</div><div class="s-sub">${pct(unrP)}</div></div>
     <div class="summary-card"><div class="s-label">実現損益＋配当<small style="font-size:9px;color:var(--text3)">（税引後）</small></div><div class="s-value sm ${clr(tRwithDiv)}">${sign(tRwithDiv)}${fmtJP(tRwithDiv)}</div><div class="s-sub">売却益＋受取配当</div></div>
-    <div class="summary-card"><div class="s-label">累計配当+優待</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(tDiv)}</div><div class="s-sub">配当 ${fmtJP(tDivOnly)} / 優待 ${fmtJP(tYutai)}</div></div>
-    <div class="summary-card"><div class="s-label">総合損益</div><div class="s-value sm ${clr(tot)}">${sign(tot)}${fmtJP(tot)}</div><div class="s-sub">含み+実現+配当</div></div>
+    ${isStock?`<div class="summary-card"><div class="s-label">累計配当+優待</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(tDiv)}</div><div class="s-sub">配当 ${fmtJP(tDivOnly)} / 優待 ${fmtJP(tYutai)}</div></div>`:''}
+    <div class="summary-card"><div class="s-label">総合損益</div><div class="s-value sm ${clr(tot)}">${sign(tot)}${fmtJP(tot)}</div><div class="s-sub">含み+実現${isStock?'+配当':''}</div></div>
   `;
 }
 
@@ -1157,7 +1324,20 @@ function renderHoldings(){
   const totalUnrP = totalCostH > 0 ? (totalUnr / totalCostH) * 100 : 0;
   // 総資産サマリーバー更新
   const assetSumEl = el('assetSummaryValue');
-  if (assetSumEl && totalVal > 0) assetSumEl.textContent = '¥' + Math.round(totalVal).toLocaleString();
+  if (assetSumEl) {
+    // 投信評価額も合算して表示
+    let fundTotalVal = 0;
+    if (assetFilter !== 'stock') {
+      const fh = computeFundHoldings();
+      for (const k in fh) {
+        const hd = fh[k];
+        const nav = fundNav(hd.code) || hd.latestNav || 0;
+        fundTotalVal += hd.units * nav / 10000;
+      }
+    }
+    const displayVal = (assetFilter==='fund') ? fundTotalVal : (assetFilter==='stock' ? totalVal : totalVal + fundTotalVal);
+    if (displayVal > 0) assetSumEl.textContent = '¥' + Math.round(displayVal).toLocaleString();
+  }
   // 前日比（ポートフォリオ全体）
   const assetDayEl = el('assetDayChange');
   if (assetDayEl) {
@@ -2896,6 +3076,271 @@ function updateDivQuickfill(){
   sel.value=cur;
 }
 
+
+// ===================== 投資信託 =====================
+
+let _selectedFundBroker = '';
+let _selectedFundAccount = '';
+let _editFundIdx = -1;
+let fundBrokerFilter = 'all';
+
+function selectFundBroker(b) {
+  _selectedFundBroker = b;
+  ['rakuten','sbi','matsui','other'].forEach(id => {
+    const btn = el('fb_'+id);
+    if (!btn) return;
+    const match = (id==='rakuten'&&b==='楽天証券')||(id==='sbi'&&b==='SBI証券')||(id==='matsui'&&b==='松井証券')||(id==='other'&&b==='');
+    btn.style.background = match ? 'var(--accent)' : 'transparent';
+    btn.style.color = match ? '#fff' : 'var(--accent)';
+    btn.style.borderColor = match ? 'var(--accent)' : 'var(--border2)';
+  });
+}
+
+function selectFundAccount(a) {
+  _selectedFundAccount = a;
+  ['nisa','ideco','tokutei'].forEach(id => {
+    const btn = el('fa_'+id);
+    if (!btn) return;
+    btn.style.background = id===a ? 'var(--accent)' : 'transparent';
+    btn.style.color = id===a ? '#fff' : 'var(--accent)';
+    btn.style.borderColor = id===a ? 'var(--accent)' : 'var(--border2)';
+  });
+}
+
+function calcFundAmount() {
+  const nav = parseFloat(el('f_nav')?.value) || 0;
+  const units = parseFloat(el('f_units')?.value) || 0;
+  if (nav > 0 && units > 0) {
+    const amt = Math.round(units * nav / 10000);
+    if (el('f_amount')) el('f_amount').value = amt;
+  }
+}
+
+function calcFundUnits() {
+  const nav = parseFloat(el('f_nav')?.value) || 0;
+  const amt = parseFloat(el('f_amount')?.value) || 0;
+  if (nav > 0 && amt > 0) {
+    const units = Math.round(amt / nav * 10000);
+    if (el('f_units')) el('f_units').value = units;
+  }
+}
+
+function openFundModal(idx) {
+  _editFundIdx = (idx !== undefined) ? idx : -1;
+  selectFundBroker(''); selectFundAccount('');
+  ['f_code','f_name','f_memo'].forEach(id => { if(el(id)) el(id).value=''; });
+  if(el('f_units')) el('f_units').value='';
+  if(el('f_nav')) el('f_nav').value='';
+  if(el('f_amount')) el('f_amount').value='';
+  if(el('f_type')) el('f_type').value='buy';
+  const now = new Date();
+  if(el('f_date')) el('f_date').value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+
+  if (_editFundIdx >= 0 && S.funds[_editFundIdx]) {
+    const f = S.funds[_editFundIdx];
+    if(el('f_date')) el('f_date').value = f.date||'';
+    if(el('f_type')) el('f_type').value = f.type||'buy';
+    if(el('f_code')) el('f_code').value = f.code||'';
+    if(el('f_name')) el('f_name').value = f.name||'';
+    if(el('f_nav'))  el('f_nav').value  = f.nav||'';
+    if(el('f_units'))el('f_units').value= f.units||'';
+    if(el('f_amount'))el('f_amount').value=f.amount||'';
+    if(el('f_memo')) el('f_memo').value = f.memo||'';
+    selectFundBroker(f.broker||'');
+    selectFundAccount(f.account||'');
+    if(el('fundModalTitle')) el('fundModalTitle').textContent = '📈 積立を編集';
+    if(el('fundSaveBtn')) el('fundSaveBtn').textContent = '💾 更新';
+  } else {
+    if(el('fundModalTitle')) el('fundModalTitle').textContent = '📈 投資信託 積立入力';
+    if(el('fundSaveBtn')) el('fundSaveBtn').textContent = '💾 保存';
+  }
+  openModal('fundModal');
+}
+
+function saveFund() {
+  const date  = el('f_date')?.value;
+  const type  = el('f_type')?.value || 'buy';
+  const code  = el('f_code')?.value?.trim().toUpperCase();
+  const name  = el('f_name')?.value?.trim();
+  const nav   = parseFloat(el('f_nav')?.value) || 0;
+  const units = parseFloat(el('f_units')?.value) || 0;
+  const amount= parseFloat(el('f_amount')?.value) || (nav>0&&units>0 ? Math.round(units*nav/10000) : 0);
+  const memo  = el('f_memo')?.value?.trim()||'';
+
+  if (!date||!code||!name||!units||!nav) {
+    alert('日付・コード・ファンド名・基準価額・口数は必須です');
+    return;
+  }
+
+  if (!S.funds) S.funds = [];
+  const record = { date, type, code, name, nav, units, amount, broker: _selectedFundBroker, account: _selectedFundAccount, memo };
+
+  if (_editFundIdx >= 0) {
+    S.funds[_editFundIdx] = record;
+  } else {
+    S.funds.push(record);
+  }
+  S.funds.sort((a,b) => new Date(a.date)-new Date(b.date));
+  _editFundIdx = -1;
+  save();
+  closeModal('fundModal');
+  renderFundTab();
+  renderSummary(); // ホームの合計も更新
+}
+
+function delFund(idx) {
+  if (!confirm('この積立記録を削除しますか？')) return;
+  S.funds.splice(idx, 1);
+  save();
+  renderFundTab();
+  renderSummary();
+}
+
+function setFundBrokerFilter(b) {
+  fundBrokerFilter = b;
+  renderFundTab();
+}
+
+function fundAccountBadge(account) {
+  if (account==='nisa')   return '<span style="font-size:9px;background:rgba(74,222,128,.2);color:#4ade80;border-radius:4px;padding:2px 5px;flex-shrink:0">NISA</span>';
+  if (account==='ideco')  return '<span style="font-size:9px;background:rgba(124,58,237,.2);color:#7c3aed;border-radius:4px;padding:2px 5px;flex-shrink:0">iDeCo</span>';
+  if (account==='tokutei')return '<span style="font-size:9px;background:rgba(56,189,248,.15);color:#38bdf8;border-radius:4px;padding:2px 5px;flex-shrink:0">特定</span>';
+  return '';
+}
+
+function renderFundTab() {
+  if (!S.funds) S.funds = [];
+  const fh = computeFundHoldings();
+  const fhArr = Object.values(fh);
+
+  // 証券会社フィルターバー
+  const brokers = [...new Set(S.funds.map(f=>f.broker).filter(Boolean))].sort();
+  renderBrokerFilterBar('fundBrokerFilter', brokers, fundBrokerFilter, 'setFundBrokerFilter');
+
+  // フィルタ適用
+  const filteredFh = fundBrokerFilter==='all' ? fhArr : fhArr.filter(h=>h.broker===fundBrokerFilter);
+
+  // ── サマリーカード ──
+  let totalCost=0, totalEval=0, totalReal=0;
+  filteredFh.forEach(h => {
+    totalCost += h.totalCost;
+    const nav = fundNav(h.code) || h.latestNav || 0;
+    const eval_ = h.units * nav / 10000;
+    totalEval += eval_;
+    totalReal += h.realizedPnl||0;
+  });
+  const totalUnr = totalEval - totalCost;
+  const totalUnrP = totalCost>0 ? totalUnr/totalCost*100 : 0;
+  const fundsCount = el('fundsCount');
+  if (fundsCount) fundsCount.textContent = filteredFh.length + 'ファンド';
+
+  const sg = el('fundSummaryGrid');
+  if (sg) sg.innerHTML = `
+    <div class="summary-card wide"><div class="s-label">評価額合計</div><div class="s-value accent-c">${fmtJP(totalEval)}</div><div class="s-sub">元本合計 ${fmtJP(totalCost)}</div></div>
+    <div class="summary-card"><div class="s-label">含み損益</div><div class="s-value sm ${clr(totalUnr)}">${sign(totalUnr)}${fmtJP(totalUnr)}</div><div class="s-sub">${pct(totalUnrP)}</div></div>
+    <div class="summary-card"><div class="s-label">実現損益</div><div class="s-value sm ${clr(totalReal)}">${totalReal!==0?sign(totalReal)+fmtJP(totalReal):'—'}</div><div class="s-sub">解約分</div></div>
+  `;
+
+  // ── 保有ファンドカード ──
+  const cards = el('fundHoldingsCards');
+  if (!cards) return;
+  const holding = filteredFh.filter(h=>h.units>0);
+  if (!holding.length) {
+    cards.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>保有ファンドがありません<br><small>+ から積立を入力してください</small></div>';
+  } else {
+    cards.innerHTML = holding.map(h => {
+      const nav = fundNav(h.code) || h.latestNav || 0;
+      const evalV = h.units * nav / 10000;
+      const unr = evalV - h.totalCost;
+      const unrP = h.totalCost > 0 ? unr/h.totalCost*100 : 0;
+      const unrC = clr(unr);
+      // 積立回数
+      const cnt = (S.funds||[]).filter(f=>f.code===h.code&&f.broker===h.broker&&f.type==='buy').length;
+      return `<div class="holding-card">
+        <div class="holding-card-header" onclick="this.nextElementSibling.classList.toggle('open')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:nowrap;overflow:hidden">
+                <span style="font-weight:800;font-size:14px;color:var(--text);flex-shrink:0">${h.code}</span>
+                ${brokerBadge(h.broker)}
+                ${fundAccountBadge(h.account)}
+              </div>
+              <div style="font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">基準価額 <span style="font-weight:700;color:var(--text2)">${nav>0?'¥'+Math.round(nav).toLocaleString():'未設定'}</span>　積立${cnt}回</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;min-width:90px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:1px">含み損益</div>
+              <div class="mono ${unrC}" style="font-size:15px;font-weight:700;white-space:nowrap">${nav>0?(unr>=0?'+':'-')+'¥'+Math.abs(Math.round(unr)).toLocaleString():'—'}</div>
+            </div>
+          </div>
+        </div>
+        <div class="holding-card-detail">
+          <div class="holding-card-detail-inner">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+              <div style="background:var(--bg);border-radius:8px;padding:9px 11px"><div class="s-label" style="font-size:10px">保有口数</div><div class="mono" style="font-size:13px;font-weight:600">${h.units.toLocaleString()}口</div></div>
+              <div style="background:var(--bg);border-radius:8px;padding:9px 11px"><div class="s-label" style="font-size:10px">元本合計</div><div class="mono" style="font-size:13px;font-weight:600">${fmtJP(h.totalCost)}</div></div>
+              <div style="background:var(--bg);border-radius:8px;padding:9px 11px"><div class="s-label" style="font-size:10px">評価額</div><div class="mono" style="font-size:13px;font-weight:600">${nav>0?fmtJP(evalV):'—'}</div></div>
+              <div style="background:var(--bg);border-radius:8px;padding:9px 11px"><div class="s-label" style="font-size:10px">損益率</div><div class="mono ${unrC}" style="font-size:13px;font-weight:600">${nav>0?pct(unrP):'—'}</div></div>
+            </div>
+            <div style="margin-top:10px;padding:10px 12px;background:var(--bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:12px;font-weight:700;color:var(--text2)">累計損益</div>
+              <div class="mono ${clr(unr+h.realizedPnl)}" style="font-size:16px;font-weight:800">${((unr+h.realizedPnl)>=0?'+':'-')+'¥'+Math.abs(Math.round(unr+h.realizedPnl)).toLocaleString()}</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-outlined btn-sm" style="flex:1;justify-content:center" onclick="openFundModal_prefill('${h.code}','${h.name}','${h.broker}','${h.account}')">追加積立</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  renderFundHistory();
+}
+
+function openFundModal_prefill(code, name, broker, account) {
+  openFundModal();
+  if(el('f_code')) el('f_code').value = code;
+  if(el('f_name')) el('f_name').value = name;
+  selectFundBroker(broker);
+  selectFundAccount(account);
+}
+
+function renderFundHistory() {
+  const tbody = el('fundHistoryBody');
+  if (!tbody) return;
+  if (!S.funds || !S.funds.length) {
+    tbody.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>積立履歴がありません</div>';
+    return;
+  }
+  const q = (el('fundHistorySearch')?.value||'').toLowerCase();
+  const all = [...S.funds].reverse();
+  const filtered = q ? all.filter(f=>(f.code||'').toLowerCase().includes(q)||(f.name||'').toLowerCase().includes(q)) : all;
+  if (!filtered.length) { tbody.innerHTML='<div class="empty"><div class="empty-icon">🔍</div>該当なし</div>'; return; }
+
+  tbody.innerHTML = filtered.map(f => {
+    const origIdx = S.funds.indexOf(f);
+    const isBuy = f.type==='buy';
+    return `<div class="trade-card">
+      <div class="trade-card-top">
+        <span style="font-weight:800;font-size:13px;color:var(--text)">${f.code}</span>
+        <span style="font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">${(f.name||'').slice(0,12)}</span>
+        ${brokerBadge(f.broker||'')}
+        ${fundAccountBadge(f.account||'')}
+        <button class="btn btn-sm btn-ghost" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="openFundModal(${origIdx})">✏️</button>
+        <button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px" onclick="delFund(${origIdx})">🗑</button>
+      </div>
+      <div class="trade-card-bot">
+        <span style="color:var(--text3);font-size:11px">${f.date}</span>
+        ${mkChip(isBuy, isBuy?'積立':'解約')}
+        <span class="mono" style="font-size:12px">${(f.units||0).toLocaleString()}口</span>
+        <span class="mono" style="font-size:12px">基準値 ¥${(f.nav||0).toLocaleString()}</span>
+        <span class="mono" style="font-size:12px;margin-left:auto;color:var(--accent)">¥${(f.amount||0).toLocaleString()}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function addAlert(){
   const name=v('a_name').trim(),targetYield=parseFloat(v('a_yield')),dps=parseFloat(v('a_dps'))||null;
   if(!ticker||!targetYield){alert('必須項目（*）を入力してください');return;}
@@ -3826,12 +4271,13 @@ function switchTab(name){
   if(name==='holdings' && !_rendered.holdings){ renderHoldings(); _rendered.holdings=true; }
   if(name==='trades'   && !_rendered.trades)  { renderTrades();   _rendered.trades=true;   }
   if(name==='dividends'&& !_rendered.dividends){ renderDividends(); _rendered.dividends=true; }
+  if(name==='funds') renderFundTab();
   if(name==='calendar') renderCalendar();
 }
 
 // ===================== SWIPE =====================
 (function(){
-  const TABS = ['dashboard','holdings','trades','dividends','calendar'];
+  const TABS = ['dashboard','holdings','trades','dividends','funds','calendar'];
   var sx=0, sy=0, sTime=0;
   document.addEventListener('touchstart', function(e){
     // モーダルが開いているときは無効
