@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chokinkako-v3';
+const CACHE_NAME = 'chokinkako-v4';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -33,7 +33,7 @@ self.addEventListener('fetch', event => {
       return response;
     }).catch(() => {
       return caches.match(event.request).then(cached => {
-        return cached || caches.match('./index-5.html');
+        return cached || caches.match('./index.html');
       });
     })
   );
