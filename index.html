@@ -1812,10 +1812,24 @@ function renderLineChart() {
 
     const hasTopix = topixData.some(v => v !== null);
 
-    // TOPIX用のY軸範囲
-    const topixVals = topixData.filter(v=>v!==null);
-    const topixMin = topixVals.length ? Math.floor(Math.min(...topixVals)*0.998/10)*10 : 0;
-    const topixMax = topixVals.length ? Math.ceil(Math.max(...topixVals)*1.002/10)*10 : 100;
+    // TOPIXを資産額スケールに正規化（期間最初の資産値を基準にスケーリング）
+    let topixScaled = topixData.map(() => null);
+    if (hasTopix) {
+      // 資産の最初の非nullインデックスを見つける
+      const firstAssetIdx = assetData.findIndex(v => v !== null);
+      const firstAssetVal = firstAssetIdx >= 0 ? assetData[firstAssetIdx] : null;
+      // TOPIXの同じインデックス or 最初の非null値を基準にする
+      let baseTopix = null;
+      if (firstAssetIdx >= 0 && topixData[firstAssetIdx] !== null) {
+        baseTopix = topixData[firstAssetIdx];
+      } else {
+        const firstTopixIdx = topixData.findIndex(v => v !== null);
+        baseTopix = firstTopixIdx >= 0 ? topixData[firstTopixIdx] : null;
+      }
+      if (baseTopix && firstAssetVal) {
+        topixScaled = topixData.map(v => v !== null ? firstAssetVal * (v / baseTopix) : null);
+      }
+    }
 
     charts['line'] = new Chart(canvas, {
       type: 'line',
@@ -1836,12 +1850,11 @@ function renderLineChart() {
             pointHoverBorderWidth: 2,
             borderWidth: 2.5,
             spanGaps: true,
-            yAxisID: 'y'
           },
           ...(hasTopix ? [{
             label: 'TOPIX(1306)',
-            data: topixData,
-            borderColor: 'rgba(148,163,184,.7)',
+            data: topixScaled,
+            borderColor: 'rgba(148,163,184,.65)',
             backgroundColor: 'transparent',
             fill: false,
             tension: 0.3,
@@ -1851,9 +1864,8 @@ function renderLineChart() {
             pointHoverBorderColor: '#fff',
             pointHoverBorderWidth: 2,
             borderWidth: 1.5,
-            borderDash: [4,3],
+            borderDash: [5,4],
             spanGaps: true,
-            yAxisID: 'y2'
           }] : [])
         ]
       },
@@ -1864,7 +1876,19 @@ function renderLineChart() {
           tooltip: {
             callbacks: {
               label: ctx2 => {
-                if(ctx2.dataset.yAxisID === 'y2') return ctx2.raw !== null ? 'TOPIX(1306): ¥'+Math.round(ctx2.raw).toLocaleString() : '';
+                if (ctx2.dataset.label === 'TOPIX(1306)') {
+                  // TOPIXは元の価格と騰落率を表示
+                  const i = ctx2.dataIndex;
+                  const rawTopix = topixData[i];
+                  const firstTopixIdx = topixData.findIndex(v => v !== null);
+                  const baseT = firstTopixIdx >= 0 ? topixData[firstTopixIdx] : null;
+                  if (rawTopix !== null && baseT) {
+                    const chgPct = ((rawTopix - baseT) / baseT * 100).toFixed(2);
+                    const sign = chgPct >= 0 ? '+' : '';
+                    return `TOPIX: ¥${Math.round(rawTopix).toLocaleString()} (${sign}${chgPct}%)`;
+                  }
+                  return '';
+                }
                 return ctx2.raw !== null ? '総資産: ¥'+Math.round(ctx2.raw).toLocaleString() : '';
               }
             }
@@ -1881,16 +1905,7 @@ function renderLineChart() {
             position: 'left',
             ticks: { color:'#94a3b8', callback: v => fmtMan2(v)+'円', font:{size:11}, maxTicksLimit:4 },
             grid: { color:'rgba(148,163,184,.1)' }
-          },
-          ...(hasTopix ? {
-            y2: {
-              min: topixMin,
-              max: topixMax,
-              position: 'right',
-              ticks: { color:'rgba(148,163,184,.6)', callback: v => '¥'+v.toLocaleString(), font:{size:9}, maxTicksLimit:4 },
-              grid: { display: false }
-            }
-          } : {})
+          }
         }
       }
     });
