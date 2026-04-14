@@ -4067,7 +4067,21 @@ document.addEventListener('visibilitychange', function(){
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./service-worker.js');
+    navigator.serviceWorker.register('./service-worker.js').then(reg => {
+      // 新しいservice-workerが待機状態になったら即座に適用してリロード
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            newWorker.postMessage('skipWaiting');
+          }
+        });
+      });
+    });
+    // 新しいservice-workerがコントロールを取得したら自動リロード
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
   });
 }
 </script>
