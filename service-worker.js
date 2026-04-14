@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chokinkako-v4';
+const CACHE_NAME = 'chokinkako-v5';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -10,9 +10,8 @@ self.addEventListener('activate', event => {
       Promise.all(
         keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
@@ -23,7 +22,6 @@ self.addEventListener('fetch', event => {
       url.includes('codetabs')) {
     return;
   }
-
   event.respondWith(
     fetch(event.request).then(response => {
       if (response.ok) {
@@ -37,4 +35,8 @@ self.addEventListener('fetch', event => {
       });
     })
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data === 'skipWaiting') self.skipWaiting();
 });
