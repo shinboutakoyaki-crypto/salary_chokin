@@ -161,6 +161,10 @@ tr:active td{background:rgba(56,189,248,.05);}
 }
 /* 月次レポート以外のモーダルは内部スクロール */
 .modal-overlay:not(#monthlyReportModal) .modal{overflow-y:auto;display:block;padding-bottom:var(--safe-bottom);}
+.sector-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(124,58,237,.12);color:#7c3aed;border:1px solid rgba(124,58,237,.2);white-space:nowrap;}
+.sector-preset-btn{padding:7px 8px;border-radius:8px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;}
+.sector-preset-btn.active,.sector-preset-btn:active{border-color:var(--purple);background:rgba(124,58,237,.1);color:#7c3aed;}
+
 .amounts-hidden .s-value,
 .amounts-hidden .s-sub,
 .amounts-hidden .mono,
@@ -490,6 +494,27 @@ tr:active td{background:rgba(56,189,248,.05);}
 </div>
 <div style="border-top:1px solid var(--border);margin:4px 0"></div>
 <button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');exportBackup()"><span style="font-size:18px">💾</span> バックアップ保存</button><button class="btn btn-outlined" style="justify-content:flex-start;gap:12px;padding:13px 16px" onclick="closeModal('menuModal');el('restoreFile').click()"><span style="font-size:18px">📂</span> バックアップから復元</button><input type="file" id="restoreFile" accept=".json" style="display:none" onchange="importBackup(this)"><div style="border-top:1px solid var(--border);margin:4px 0"></div><button class="btn" style="justify-content:flex-start;gap:12px;padding:13px 16px;background:rgba(248,113,113,.1);color:var(--red);border:1px solid var(--red)" onclick="closeModal('menuModal');resetAllData()"><span style="font-size:18px">🗑️</span> 全データ削除</button><button class="btn btn-ghost" onclick="closeModal('menuModal')">閉じる</button></div></div></div>
+<!-- SECTOR MODAL -->
+<div class="modal-overlay" id="sectorModal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-handle"></div>
+    <div class="modal-header"><div class="modal-title">🏷️ セクター設定</div><button class="modal-close" onclick="closeModal('sectorModal')">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+      <input type="hidden" id="sector_pk">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:2px">セクターを選択するか、直接入力してください</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px" id="sectorPresets">
+        <!-- JSで生成 -->
+      </div>
+      <div style="position:relative;margin-top:4px">
+        <input type="text" id="sector_custom" class="form-input" placeholder="カスタム入力（例：不動産、ヘルスケア…）" style="font-size:13px">
+      </div>
+      <button class="btn btn-primary" style="margin-top:4px" onclick="saveSector()">💾 保存</button>
+      <button id="sectorClearBtn" class="btn btn-danger" style="display:none" onclick="clearSector()">🗑 セクターを削除</button>
+      <button class="btn btn-ghost" onclick="closeModal('sectorModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="accountModal">
   <div class="modal" style="max-width:320px">
     <div class="modal-header"><h2 class="modal-title">口座種別を選択</h2></div>
@@ -759,7 +784,7 @@ tr:active td{background:rgba(56,189,248,.05);}
 
 <script>
 const SK='portfoliokit_v3';
-let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{},manualPriceTickers:[],topixHistory:[]};
+let S={trades:[],dividends:[],alerts:[],prices:{},prevClose:{},pnlHistory:[],lastUpdated:null,incomeAssets:[],priceUpdatedAt:{},manualPriceTickers:[],topixHistory:[],sectorMap:{}};
 let csvImportData=null,csvDivData=null;
 
 function load(){try{const d=localStorage.getItem(SK);if(d)S={...S,...JSON.parse(d)};}catch(e){} S.fetchStatus={};}
@@ -1284,6 +1309,7 @@ function renderHoldings(){
               <span class="ticker ${hd.market==='JP'?'ticker-jp':'ticker-us'}" style="font-size:15px;flex-shrink:0">${hd.ticker}</span>
               ${brokerBadge(hd.broker)}
               ${accountBadge(hd.account)}
+              ${(()=>{ const sec=(S.sectorMap&&S.sectorMap[hd.priceKey])||''; return sec?`<span class="sector-badge" style="flex-shrink:0">${sec}</span>`:''; })()}
               <span style="font-size:12px;color:var(--text2);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">${(hd.name||'').slice(0,8)+(hd.name&&hd.name.length>8?'…':'')}</span>
             </div>
             <div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">
@@ -1361,6 +1387,7 @@ function renderHoldings(){
           </div>
           <div style="margin-top:10px">
             <button class="btn btn-sm" style="font-size:10px;padding:5px 10px;width:100%;background:${hd.account==='nisa'?'rgba(22,163,74,.15)':hd.account==='tokutei'?'rgba(29,111,232,.15)':'rgba(100,116,139,.12)'};color:${hd.account==='nisa'?'#16a34a':hd.account==='tokutei'?'#1d6fe8':'var(--text3)'};border:1px solid currentColor;border-radius:8px;margin-bottom:8px" onclick="openAccountModal('${k}');event.stopPropagation()">${hd.account==='nisa'?'🌱 新NISA':hd.account==='tokutei'?'📋 特定口座':'📝 一般/未設定'}　✏️ 口座変更</button>
+            ${(()=>{const sec=(S.sectorMap&&S.sectorMap[hd.priceKey])||'';return `<button class="btn btn-sm" style="font-size:10px;padding:5px 10px;width:100%;background:${sec?'rgba(124,58,237,.12)':'rgba(148,163,184,.1)'};color:${sec?'#7c3aed':'var(--text3)'};border:1px solid currentColor;border-radius:8px;margin-bottom:8px" onclick="openSectorModal('${hd.priceKey}');event.stopPropagation()">🏷️ ${sec?'セクター：'+sec+'　✏️ 変更':'セクターを設定'}</button>`;})()}
             ${(()=>{const isManual=S.manualPriceTickers&&S.manualPriceTickers.indexOf(hd.priceKey)>=0;return `<button class="btn btn-sm" style="font-size:10px;padding:5px 10px;width:100%;background:${isManual?'rgba(217,119,6,.15)':'rgba(148,163,184,.1)'};color:${isManual?'#d97706':'var(--text3)'};border:1px solid currentColor;border-radius:8px;margin-bottom:8px" onclick="toggleManualPrice('${hd.priceKey}');event.stopPropagation()">${isManual?'🔒 手動管理中（タップで解除）':'🔓 自動取得（タップで手動管理に変更）'}</button>`;})()}
           </div>
           <div style="display:flex;gap:8px;margin-top:2px">
@@ -2833,6 +2860,66 @@ function renderIncomeAccordionList(){
       <button onclick="delIncomeAsset(${i});renderIncomeAccordionList()" style="background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:2px 6px">🗑</button>
     </div>
   `).join('');
+}
+
+// ── セクター設定 ──────────────────────────────
+const SECTOR_PRESETS = [
+  '銀行・金融','保険','不動産・REIT',
+  '情報・通信','電気・ガス','製造業',
+  '小売・サービス','医薬・ヘルスケア','食品・飲料',
+  '輸送・物流','化学・素材','建設・インフラ',
+  'テクノロジー','エネルギー','その他',
+];
+
+function openSectorModal(pk) {
+  if (!S.sectorMap) S.sectorMap = {};
+  const current = S.sectorMap[pk] || '';
+  el('sector_pk').value = pk;
+  el('sector_custom').value = current;
+  // プリセットボタン描画
+  const wrap = el('sectorPresets');
+  if (wrap) {
+    wrap.innerHTML = SECTOR_PRESETS.map(s => {
+      const isActive = s === current;
+      return `<button class="sector-preset-btn${isActive?' active':''}" onclick="selectSectorPreset('${s}')">${s}</button>`;
+    }).join('');
+  }
+  // 削除ボタン表示制御
+  const clearBtn = el('sectorClearBtn');
+  if (clearBtn) clearBtn.style.display = current ? '' : 'none';
+  openModal('sectorModal');
+}
+
+function selectSectorPreset(s) {
+  el('sector_custom').value = s;
+  // ボタンのハイライト更新
+  const btns = el('sectorPresets').querySelectorAll('.sector-preset-btn');
+  btns.forEach(b => b.classList.toggle('active', b.textContent === s));
+}
+
+function saveSector() {
+  const pk = el('sector_pk').value;
+  const val = el('sector_custom').value.trim();
+  if (!S.sectorMap) S.sectorMap = {};
+  if (val) {
+    S.sectorMap[pk] = val;
+  } else {
+    delete S.sectorMap[pk];
+  }
+  save();
+  closeModal('sectorModal');
+  renderHoldings();
+  showToast('🏷️ セクターを保存しました', 'success');
+}
+
+function clearSector() {
+  const pk = el('sector_pk').value;
+  if (!S.sectorMap) S.sectorMap = {};
+  delete S.sectorMap[pk];
+  save();
+  closeModal('sectorModal');
+  renderHoldings();
+  showToast('🗑 セクターを削除しました');
 }
 
 function addIncomeAssetFromMenu(){
