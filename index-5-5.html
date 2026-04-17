@@ -247,6 +247,7 @@ tr:active td{background:rgba(56,189,248,.05);}
         <span class="card-title">📈 総資産推移</span>
         <div style="display:flex;gap:6px">
           <button id="assetToggle_asset" class="btn btn-sm btn-primary" onclick="setAssetMode('asset')" style="padding:4px 10px;font-size:11px">総資産</button>
+          <button id="assetToggle_diff" class="btn btn-sm btn-ghost" onclick="setAssetMode('diff')" style="padding:4px 10px;font-size:11px">前日比</button>
           <button id="assetToggle_pnl" class="btn btn-sm btn-ghost" onclick="setAssetMode('pnl')" style="padding:4px 10px;font-size:11px">実損益</button>
         </div>
       </div>
@@ -1622,18 +1623,15 @@ function setPnlSubMode(mode) {
 
 function setAssetMode(mode) {
   assetMode = mode;
-  el('assetToggle_asset').className = 'btn btn-sm ' + (mode==='asset'?'btn-primary':'btn-ghost');
-  el('assetToggle_pnl').className = 'btn btn-sm ' + (mode==='pnl'?'btn-primary':'btn-ghost');
-  el('assetToggle_asset').style.padding='4px 10px'; el('assetToggle_asset').style.fontSize='11px';
-  el('assetToggle_pnl').style.padding='4px 10px'; el('assetToggle_pnl').style.fontSize='11px';
-  // 期間ボタン：常に表示
+  ['asset','diff','pnl'].forEach(m => {
+    const b = el('assetToggle_'+m);
+    if (b) { b.className='btn btn-sm '+(mode===m?'btn-primary':'btn-ghost'); b.style.padding='4px 10px'; b.style.fontSize='11px'; }
+  });
   const pb = el('linePeriodBtns');
-  if (pb) pb.style.display = '';
-  // サブトグル（単月/累計）は非表示に統一
+  if (pb) pb.style.display = mode === 'diff' ? 'none' : '';
   const sub = el('pnlSubToggle'); if (sub) sub.style.display = 'none';
-  // ナビバー表示制御
-  const nav = el('monthlyNavBar'); if (nav) nav.style.display = linePeriod==='monthly' ? '' : 'none';
-  const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = linePeriod==='yearly' ? '' : 'none';
+  const nav = el('monthlyNavBar'); if (nav) nav.style.display = (mode!=='diff' && linePeriod==='monthly') ? '' : 'none';
+  const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = (mode!=='diff' && linePeriod==='yearly') ? '' : 'none';
   renderLineChart();
 }
 
@@ -1785,7 +1783,6 @@ function renderLineChart() {
       pointBgColors = assetData.map(() => '#dc2626');
     }
 
-    // データが全部nullまたは空のときは空メッセージ
     const hasData = assetData.some(v => v !== null);
     if (!hasData) {
       ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -1806,127 +1803,33 @@ function renderLineChart() {
     const isBlueMode = linePeriod === 'monthly' || linePeriod === 'yearly';
     const lineColor = isBlueMode ? '#1d6fe8' : '#dc2626';
 
-    // TOPIX(1306)データ取得
-    const topixHistory = S.topixHistory || [];
-    const topixDateMap = {};
-    topixHistory.forEach(t => { if(t.date) topixDateMap[t.date] = t.price; });
-
-    // xLabelsに対応するTOPIXデータを生成
-    // xLabelsとdateListが対応するようにdateListを使う
-    let topixData = [];
-    if(linePeriod === '1w' || linePeriod === '2w') {
-      const days2 = linePeriod === '1w' ? 7 : 14;
-      const today3 = new Date();
-      for(let i = days2-1; i >= 0; i--) {
-        const d = new Date(today3); d.setDate(d.getDate()-i);
-        const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-        topixData.push(topixDateMap[ds] !== undefined ? topixDateMap[ds] : null);
-      }
-    } else if(linePeriod === 'monthly') {
-      const [ly2,lm2] = lineMonth.split('-').map(Number);
-      const dim2 = new Date(ly2,lm2,0).getDate();
-      for(let d=1; d<=dim2; d++) {
-        const ds = lineMonth+'-'+String(d).padStart(2,'0');
-        topixData.push(topixDateMap[ds] !== undefined ? topixDateMap[ds] : null);
-      }
-    } else if(linePeriod === 'yearly') {
-      for(let m=1; m<=12; m++) {
-        const mStr = lineYear+'-'+String(m).padStart(2,'0');
-        const mData = topixHistory.filter(t => t.date && t.date.startsWith(mStr));
-        if(mData.length) {
-          topixData.push(mData.sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0].price);
-        } else topixData.push(null);
-      }
-    } else {
-      const yearMap2 = {};
-      topixHistory.forEach(t => { if(t.date){ const y=t.date.split('-')[0]; if(!yearMap2[y]||t.date>yearMap2[y].date) yearMap2[y]=t; }});
-      topixData = xLabels.map((lbl,i) => {
-        const y = lbl.replace('年','');
-        return yearMap2[y] ? yearMap2[y].price : null;
-      });
-    }
-
-    const hasTopix = topixData.some(v => v !== null);
-
-    // TOPIXを資産額スケールに正規化（期間最初の資産値を基準にスケーリング）
-    let topixScaled = topixData.map(() => null);
-    if (hasTopix) {
-      // 資産の最初の非nullインデックスを見つける
-      const firstAssetIdx = assetData.findIndex(v => v !== null);
-      const firstAssetVal = firstAssetIdx >= 0 ? assetData[firstAssetIdx] : null;
-      // TOPIXの同じインデックス or 最初の非null値を基準にする
-      let baseTopix = null;
-      if (firstAssetIdx >= 0 && topixData[firstAssetIdx] !== null) {
-        baseTopix = topixData[firstAssetIdx];
-      } else {
-        const firstTopixIdx = topixData.findIndex(v => v !== null);
-        baseTopix = firstTopixIdx >= 0 ? topixData[firstTopixIdx] : null;
-      }
-      if (baseTopix && firstAssetVal) {
-        topixScaled = topixData.map(v => v !== null ? firstAssetVal * (v / baseTopix) : null);
-      }
-    }
-
     charts['line'] = new Chart(canvas, {
       type: 'line',
       data: {
         labels: xLabels,
-        datasets: [
-          {
-            label: '総資産',
-            data: assetData,
-            borderColor: lineColor,
-            backgroundColor: 'transparent',
-            fill: false,
-            tension: 0.3,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: lineColor,
-            pointHoverBorderColor: '#fff',
-            pointHoverBorderWidth: 2,
-            borderWidth: 2.5,
-            spanGaps: true,
-          },
-          ...(hasTopix ? [{
-            label: 'TOPIX(1306)',
-            data: topixScaled,
-            borderColor: 'rgba(148,163,184,.65)',
-            backgroundColor: 'transparent',
-            fill: false,
-            tension: 0.3,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            pointHoverBackgroundColor: '#94a3b8',
-            pointHoverBorderColor: '#fff',
-            pointHoverBorderWidth: 2,
-            borderWidth: 1.5,
-            borderDash: [5,4],
-            spanGaps: true,
-          }] : [])
-        ]
+        datasets: [{
+          label: '総資産',
+          data: assetData,
+          borderColor: lineColor,
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: lineColor,
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
+          borderWidth: 2.5,
+          spanGaps: true,
+        }]
       },
       options: {
         ...cOpts,
         plugins: {
-          legend: { display: hasTopix, labels: { color:'#94a3b8', font:{size:10}, boxWidth:20, padding:10 } },
+          legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx2 => {
-                if (ctx2.dataset.label === 'TOPIX(1306)') {
-                  // TOPIXは元の価格と騰落率を表示
-                  const i = ctx2.dataIndex;
-                  const rawTopix = topixData[i];
-                  const firstTopixIdx = topixData.findIndex(v => v !== null);
-                  const baseT = firstTopixIdx >= 0 ? topixData[firstTopixIdx] : null;
-                  if (rawTopix !== null && baseT) {
-                    const chgPct = ((rawTopix - baseT) / baseT * 100).toFixed(2);
-                    const sign = chgPct >= 0 ? '+' : '';
-                    return `TOPIX: ¥${Math.round(rawTopix).toLocaleString()} (${sign}${chgPct}%)`;
-                  }
-                  return '';
-                }
-                return ctx2.raw !== null ? '総資産: ¥'+Math.round(ctx2.raw).toLocaleString() : '';
-              }
+              label: ctx2 => ctx2.raw !== null ? '総資産: ¥'+Math.round(ctx2.raw).toLocaleString() : ''
             }
           }
         },
@@ -1936,8 +1839,7 @@ function renderLineChart() {
             grid: { display: false }
           },
           y: {
-            min: yMin,
-            max: yMax,
+            min: yMin, max: yMax,
             position: 'left',
             ticks: { color:'#94a3b8', callback: v => fmtMan2(v)+'円', font:{size:11}, maxTicksLimit:4 },
             grid: { color:'rgba(148,163,184,.1)' }
@@ -1946,8 +1848,146 @@ function renderLineChart() {
       }
     });
 
-    // 月次モード以外では日付リスト不要
-    
+  } else if (assetMode === 'diff') {
+    // ── 前日比モード：総資産の前日比(円) vs TOPIX前日比(%) ──
+    const bar2 = el('pnlSummaryBar'); if (bar2) bar2.style.display = 'none';
+
+    const sorted = (S.pnlHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+    const topixHist = (S.topixHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+    const h2 = computeHoldings();
+    const currentTotalCost2 = Object.values(h2).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
+    const evalOf2 = snap => (snap.totalCost !== undefined ? snap.totalCost : currentTotalCost2) + (snap.unrealized||0);
+
+    // 過去30日の日付リスト
+    const days30 = 30;
+    const today4 = new Date();
+    const dateList30 = [];
+    for (let i = days30-1; i >= 0; i--) {
+      const d = new Date(today4); d.setDate(d.getDate()-i);
+      dateList30.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+    }
+
+    // 日付→評価額マップ
+    const evalMap = {};
+    sorted.forEach(p => { if(p.date) evalMap[p.date] = evalOf2(p); });
+    const topixMap = {};
+    topixHist.forEach(t => { if(t.date) topixMap[t.date] = t.price; });
+
+    // 前日比を計算
+    const xL = [], diffData = [], topixDiffData = [];
+    let prevEval = null, prevTopix = null;
+    for (let i = 0; i < dateList30.length; i++) {
+      const ds = dateList30[i];
+      const [,mm,dd] = ds.split('-');
+      xL.push(parseInt(mm)+'/'+parseInt(dd));
+      const curEval = evalMap[ds] !== undefined ? evalMap[ds] : null;
+      const curTopix = topixMap[ds] !== undefined ? topixMap[ds] : null;
+      if (curEval !== null && prevEval !== null) {
+        diffData.push(curEval - prevEval);
+      } else {
+        diffData.push(null);
+      }
+      if (curTopix !== null && prevTopix !== null) {
+        topixDiffData.push(((curTopix - prevTopix) / prevTopix) * 100);
+      } else {
+        topixDiffData.push(null);
+      }
+      if (curEval !== null) prevEval = curEval;
+      if (curTopix !== null) prevTopix = curTopix;
+    }
+
+    const hasDiff = diffData.some(v => v !== null);
+    const hasTopixDiff = topixDiffData.some(v => v !== null);
+
+    if (!hasDiff) {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '13px Outfit'; ctx.textAlign = 'center';
+      ctx.fillText('データが不足しています。更新を続けるとグラフが表示されます', canvas.width/2, canvas.height/2);
+      return;
+    }
+
+    // 左Y軸（総資産前日比・円）のスケール
+    const dVals = diffData.filter(v => v !== null);
+    const dMax = Math.max(...dVals.map(Math.abs));
+    const dPad = dMax * 0.3 || 10000;
+    const dBound = Math.ceil((dMax + dPad) / 10000) * 10000;
+
+    charts['line'] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: xL,
+        datasets: [
+          {
+            label: '総資産前日比(円)',
+            data: diffData,
+            borderColor: '#1d6fe8',
+            backgroundColor: ctx2 => {
+              if (!ctx2.chart.chartArea) return 'transparent';
+              const g = ctx2.chart.ctx.createLinearGradient(0, ctx2.chart.chartArea.top, 0, ctx2.chart.chartArea.bottom);
+              g.addColorStop(0, 'rgba(29,111,232,.18)'); g.addColorStop(1, 'rgba(29,111,232,.0)');
+              return g;
+            },
+            fill: 'origin',
+            tension: 0.3, pointRadius: 0, pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#1d6fe8', pointHoverBorderColor:'#fff', pointHoverBorderWidth:2,
+            borderWidth: 2.5, spanGaps: true, yAxisID: 'yLeft',
+          },
+          ...(hasTopixDiff ? [{
+            label: 'TOPIX前日比(%)',
+            data: topixDiffData,
+            borderColor: '#f59e0b',
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.3, pointRadius: 0, pointHoverRadius: 4,
+            pointHoverBackgroundColor: '#f59e0b', pointHoverBorderColor:'#fff', pointHoverBorderWidth:2,
+            borderWidth: 2, borderDash: [5,4], spanGaps: true, yAxisID: 'yRight',
+          }] : [])
+        ]
+      },
+      options: {
+        ...cOpts,
+        plugins: {
+          legend: { display: hasTopixDiff, labels: { color:'#94a3b8', font:{size:10}, boxWidth:20, padding:10 } },
+          tooltip: {
+            callbacks: {
+              label: c2 => {
+                if (c2.dataset.yAxisID === 'yRight') {
+                  const v = c2.raw; if (v === null) return '';
+                  return `TOPIX前日比: ${v>=0?'+':''}${v.toFixed(2)}%`;
+                }
+                const v = c2.raw; if (v === null) return '';
+                return `前日比: ${v>=0?'+':''}¥${Math.round(v).toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit:10, font:{size:11} },
+            grid: { display: false }
+          },
+          yLeft: {
+            type: 'linear', position: 'left',
+            min: -dBound, max: dBound,
+            ticks: {
+              color:'#94a3b8', font:{size:11}, maxTicksLimit:5,
+              callback: v => (v>=0?'+':'')+Math.round(v/1000)+'千'
+            },
+            grid: { color:'rgba(148,163,184,.1)' }
+          },
+          ...(hasTopixDiff ? {
+            yRight: {
+              type: 'linear', position: 'right',
+              ticks: {
+                color:'#f59e0b', font:{size:11}, maxTicksLimit:5,
+                callback: v => (v>=0?'+':'')+v.toFixed(1)+'%'
+              },
+              grid: { display: false }
+            }
+          } : {})
+        }
+      }
+    });
 
   } else {
     // 実損益モード：linePeriodに応じて描画
