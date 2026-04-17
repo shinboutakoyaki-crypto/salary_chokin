@@ -236,6 +236,14 @@ tr:active td{background:rgba(56,189,248,.05);}
     </div>
     <div class="card">
       <div class="card-header">
+        <span class="card-title">🏷️ セクター別構成</span>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="sectorPieContainer"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
         <span class="card-title">📈 総資産推移</span>
         <div style="display:flex;gap:6px">
           <button id="assetToggle_asset" class="btn btn-sm btn-primary" onclick="setAssetMode('asset')" style="padding:4px 10px;font-size:11px">総資産</button>
@@ -1138,6 +1146,7 @@ function renderSummary(){
     <div class="summary-card"><div class="s-label">累計配当+優待</div><div class="s-value sm" style="color:var(--yellow)">${fmtJP(tDiv)}</div><div class="s-sub">配当 ${fmtJP(tDivOnly)} / 優待 ${fmtJP(tYutai)}</div></div>
     <div class="summary-card"><div class="s-label">総合損益</div><div class="s-value sm ${clr(tot)}">${sign(tot)}${fmtJP(tot)}</div><div class="s-sub">含み+実現+配当</div></div>
   `;
+  renderSectorPie();
 }
 
 function taxRate(account){
@@ -1327,7 +1336,7 @@ function renderHoldings(){
               }
               ${unrP!==null?`<span class="${unrColor}">(${pct(unrP)})</span>`:''}
             </div>
-            ${(()=>{ const sec=(S.sectorMap&&S.sectorMap[hd.priceKey])||''; return sec?`<div style="margin-top:3px"><span class="sector-badge">${sec}</span></div>`:''; })()}
+            ${(()=>{ const sec=(S.sectorMap&&S.sectorMap[hd.priceKey])||''; return sec?`<div style="margin-top:3px"><span style="${sectorBadgeStyle(sec)}">${sec}</span></div>`:''; })()}
           </div>
           <div style="text-align:right;flex-shrink:0;min-width:90px">
             <div style="font-size:10px;color:var(--text3);margin-bottom:1px">含み損益</div>
@@ -2290,6 +2299,104 @@ function renderPnlRanking() {
   }
 }
 
+function renderSectorPie() {
+  const container = el('sectorPieContainer');
+  const h = computeHoldings();
+  const keys = Object.keys(h).filter(k => h[k].qty > 0);
+
+  if (!keys.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">🏷️</div>保有銘柄がありません</div>';
+    return;
+  }
+
+  // セクター別に評価額を集計
+  const map = {};
+  let totalEval = 0;
+  for (const k of keys) {
+    const hd = h[k];
+    const sec = (S.sectorMap && S.sectorMap[hd.priceKey]) || '未設定';
+    const val = (S.prices[hd.priceKey] || hd.avgCost) * hd.qty;
+    map[sec] = (map[sec] || 0) + val;
+    totalEval += val;
+  }
+
+  const sectors = Object.keys(map).sort((a,b) => map[b] - map[a]);
+  const colors = sectors.map(s => sectorChartColor(s === '未設定' ? 'その他' : s));
+  const bgColors = sectors.map(s => {
+    const c = SECTOR_COLORS[s] || SECTOR_COLORS['その他'];
+    return c ? c.bg.replace('.14)', '.75)') : 'rgba(148,163,184,.75)';
+  });
+
+  // 既存チャートを破棄
+  if (charts['sectorPie']) { charts['sectorPie'].destroy(); delete charts['sectorPie']; }
+
+  container.innerHTML = `
+    <div style="padding:12px 16px 6px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:12px;letter-spacing:.5px;text-transform:uppercase">セクター別 評価額構成比</div>
+      <div style="display:flex;gap:16px;align-items:center">
+        <div style="flex-shrink:0;width:160px;height:160px;position:relative">
+          <canvas id="sectorPieChart" width="160" height="160"></canvas>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+          ${sectors.map((s, i) => {
+            const pct = totalEval > 0 ? (map[s] / totalEval * 100) : 0;
+            const c = SECTOR_COLORS[s] || SECTOR_COLORS['その他'];
+            const textColor = c ? c.text : '#475569';
+            const bgColor = c ? c.bg : 'rgba(148,163,184,.14)';
+            const borderColor = c ? c.border : 'rgba(148,163,184,.3)';
+            return `<div style="display:flex;align-items:center;gap:7px">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${textColor};flex-shrink:0"></span>
+              <span style="font-size:11px;font-weight:600;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span>
+              <span style="font-size:11px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${textColor};flex-shrink:0">${pct.toFixed(1)}%</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px">
+        ${sectors.map(s => {
+          const pct = totalEval > 0 ? (map[s] / totalEval * 100) : 0;
+          const c = SECTOR_COLORS[s] || SECTOR_COLORS['その他'];
+          const textColor = c ? c.text : '#475569';
+          return `<div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${textColor};border-radius:3px;transition:width .4s"></div>
+            </div>
+            <span style="font-size:10px;color:var(--text3);flex-shrink:0;min-width:60px;text-align:right">¥${Math.round(map[s]).toLocaleString()}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  // Chart.js ドーナツ
+  requestAnimationFrame(() => {
+    const canvas = el('sectorPieChart');
+    if (!canvas) return;
+    charts['sectorPie'] = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: sectors,
+        datasets: [{ data: sectors.map(s => Math.round(map[s])), backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }]
+      },
+      options: {
+        responsive: false,
+        cutout: '62%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const pct = totalEval > 0 ? (ctx.raw / totalEval * 100).toFixed(1) : '0.0';
+                return ` ${pct}%  ¥${ctx.raw.toLocaleString()}`;
+              }
+            }
+          }
+        }
+      }
+    });
+  });
+}
+
 function renderTodayTrades() {
   const view = el('todayTradesView');
   const todayStr = today();
@@ -2871,6 +2978,39 @@ const SECTOR_PRESETS = [
   'テクノロジー','エネルギー','その他',
 ];
 
+// セクターカラー定義（bg, text, border）
+const SECTOR_COLORS = {
+  '銀行・金融':    {bg:'rgba(59,130,246,.14)',  text:'#2563eb', border:'rgba(59,130,246,.3)'},
+  '保険':          {bg:'rgba(99,102,241,.14)',  text:'#4f46e5', border:'rgba(99,102,241,.3)'},
+  '不動産・REIT':  {bg:'rgba(245,158,11,.14)',  text:'#b45309', border:'rgba(245,158,11,.3)'},
+  '情報・通信':    {bg:'rgba(20,184,166,.14)',  text:'#0f766e', border:'rgba(20,184,166,.3)'},
+  '電気・ガス':    {bg:'rgba(234,179,8,.14)',   text:'#a16207', border:'rgba(234,179,8,.3)'},
+  '製造業':        {bg:'rgba(107,114,128,.14)', text:'#374151', border:'rgba(107,114,128,.3)'},
+  '小売・サービス':{bg:'rgba(236,72,153,.14)',  text:'#be185d', border:'rgba(236,72,153,.3)'},
+  '医薬・ヘルスケア':{bg:'rgba(34,197,94,.14)', text:'#15803d', border:'rgba(34,197,94,.3)'},
+  '食品・飲料':    {bg:'rgba(251,146,60,.14)',  text:'#c2410c', border:'rgba(251,146,60,.3)'},
+  '輸送・物流':    {bg:'rgba(14,165,233,.14)',  text:'#0369a1', border:'rgba(14,165,233,.3)'},
+  '化学・素材':    {bg:'rgba(168,85,247,.14)',  text:'#7e22ce', border:'rgba(168,85,247,.3)'},
+  '建設・インフラ':{bg:'rgba(161,138,84,.14)',  text:'#78350f', border:'rgba(161,138,84,.3)'},
+  'テクノロジー':  {bg:'rgba(6,182,212,.14)',   text:'#0e7490', border:'rgba(6,182,212,.3)'},
+  'エネルギー':    {bg:'rgba(239,68,68,.14)',   text:'#b91c1c', border:'rgba(239,68,68,.3)'},
+  'その他':        {bg:'rgba(148,163,184,.14)', text:'#475569', border:'rgba(148,163,184,.3)'},
+};
+// セクターバッジのインラインスタイルを返す
+function sectorBadgeStyle(sec) {
+  const c = SECTOR_COLORS[sec] || {bg:'rgba(124,58,237,.12)', text:'#7c3aed', border:'rgba(124,58,237,.2)'};
+  return `display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;background:${c.bg};color:${c.text};border:1px solid ${c.border};white-space:nowrap;`;
+}
+// Chart.js用のカラーを返す（hex風の rgba文字列）
+function sectorChartColor(sec) {
+  const c = SECTOR_COLORS[sec];
+  if (c) return c.text;
+  // 未知セクターは色をハッシュで生成
+  let h = 0; for (let i=0;i<sec.length;i++) h = (h*31 + sec.charCodeAt(i)) & 0xffff;
+  const hue = (h % 360);
+  return `hsl(${hue},55%,40%)`;
+}
+
 function openSectorModal(pk) {
   if (!S.sectorMap) S.sectorMap = {};
   const current = S.sectorMap[pk] || '';
@@ -2881,7 +3021,9 @@ function openSectorModal(pk) {
   if (wrap) {
     wrap.innerHTML = SECTOR_PRESETS.map(s => {
       const isActive = s === current;
-      return `<button class="sector-preset-btn${isActive?' active':''}" onclick="selectSectorPreset('${s}')">${s}</button>`;
+      const c = SECTOR_COLORS[s] || {bg:'rgba(124,58,237,.12)', text:'#7c3aed', border:'rgba(124,58,237,.2)'};
+      const activeStyle = isActive ? `background:${c.bg};color:${c.text};border-color:${c.border};` : '';
+      return `<button class="sector-preset-btn${isActive?' active':''}" style="${activeStyle}" onclick="selectSectorPreset('${s}')">${s}</button>`;
     }).join('');
   }
   // 削除ボタン表示制御
@@ -2892,9 +3034,17 @@ function openSectorModal(pk) {
 
 function selectSectorPreset(s) {
   el('sector_custom').value = s;
-  // ボタンのハイライト更新
   const btns = el('sectorPresets').querySelectorAll('.sector-preset-btn');
-  btns.forEach(b => b.classList.toggle('active', b.textContent === s));
+  btns.forEach(b => {
+    const isActive = b.textContent === s;
+    b.classList.toggle('active', isActive);
+    if (isActive) {
+      const c = SECTOR_COLORS[s] || {bg:'rgba(124,58,237,.12)', text:'#7c3aed', border:'rgba(124,58,237,.2)'};
+      b.style.background = c.bg; b.style.color = c.text; b.style.borderColor = c.border;
+    } else {
+      b.style.background = ''; b.style.color = ''; b.style.borderColor = '';
+    }
+  });
 }
 
 function saveSector() {
