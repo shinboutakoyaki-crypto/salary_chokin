@@ -1849,50 +1849,110 @@ function renderLineChart() {
     });
 
   } else if (assetMode === 'diff') {
-    // ── 前日比モード：総資産の前日比(円) vs TOPIX前日比(%) ──
+    // ── 前日比モード：保有銘柄の前日比合計 vs TOPIX前日比(%) ──
+    // 当日買い/売りした銘柄は除外（株数変動による増減を除くため）
     const bar2 = el('pnlSummaryBar'); if (bar2) bar2.style.display = 'none';
 
-    const sorted = (S.pnlHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
     const topixHist = (S.topixHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
-    const h2 = computeHoldings();
-    const currentTotalCost2 = Object.values(h2).reduce((s,hd)=>s+hd.avgCost*hd.qty,0);
-    const evalOf2 = snap => (snap.totalCost !== undefined ? snap.totalCost : currentTotalCost2) + (snap.unrealized||0);
-
-    // 過去30日の日付リスト
-    const days30 = 30;
-    const today4 = new Date();
-    const dateList30 = [];
-    for (let i = days30-1; i >= 0; i--) {
-      const d = new Date(today4); d.setDate(d.getDate()-i);
-      dateList30.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
-    }
-
-    // 日付→評価額マップ
-    const evalMap = {};
-    sorted.forEach(p => { if(p.date) evalMap[p.date] = evalOf2(p); });
     const topixMap = {};
     topixHist.forEach(t => { if(t.date) topixMap[t.date] = t.price; });
 
-    // 前日比を計算
+    // 保有銘柄を取得
+    const h3 = computeHoldings();
+
+    // 今日の日付
+    const todayStr = new Date().toISOString().slice(0,10);
+
+    // 当日売買した銘柄のpriceKeyセット
+    const todayTradedKeys = new Set();
+    (S.trades||[]).forEach(t => {
+      if (t.date === todayStr) {
+        const pk = (t.market==='JP' ? 'JP_' : 'US_') + t.ticker;
+        todayTradedKeys.add(pk);
+      }
+    });
+
+    // 前日比合計 = Σ( 保有数量 × (現在値 - 前日終値) )、当日売買銘柄は除外
+    let totalDiffToday = null;
+    let validCount = 0;
+    for (const k of Object.keys(h3)) {
+      const hd = h3[k];
+      if (hd.qty <= 0) continue;
+      if (todayTradedKeys.has(hd.priceKey)) continue; // 当日売買除外
+      const cur = S.prices[hd.priceKey];
+      const prev = S.prevClose[hd.priceKey];
+      if (cur !== undefined && prev !== undefined && prev > 0) {
+        totalDiffToday = (totalDiffToday || 0) + (cur - prev) * hd.qty;
+        validCount++;
+      }
+    }
+
+    // TOPIX前日比（今日）
+    const topixArr = topixHist;
+    let topixDiffToday = null;
+    if (topixArr.length >= 2) {
+      const last = topixArr[topixArr.length-1];
+      const prev = topixArr[topixArr.length-2];
+      if (last && prev && prev.price > 0) {
+        topixDiffToday = ((last.price - prev.price) / prev.price) * 100;
+      }
+    }
+
+    // 過去30日分の棒グラフ用：pnlHistoryから前日比を再計算
+    // pnlHistoryのsnap同士の差分（unrealized の変化 + totalCost変化 - 当日入金分）は難しいため
+    // ここは「当日の含み損益の変化」を近似値として使う
+    // snap.unrealized の差分（totalCostの変化を除く）= 純粋な株価変動分の近似
+    const snapSorted = (S.pnlHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+
+    const days30 = 30;
+    const today5 = new Date();
+    const dateList30 = [];
+    for (let i = days30-1; i >= 0; i--) {
+      const d = new Date(today5); d.setDate(d.getDate()-i);
+      dateList30.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+    }
+
+    // 日付→スナップマップ
+    const snapMap = {};
+    snapSorted.forEach(p => { if(p.date) snapMap[p.date] = p; });
+
+    // 前日比 = unrealizedの変化（totalCostが同じ日のみ有効）
+    // ※当日に売買があるとtotalCostが変わるため、その日はnullにする
     const xL = [], diffData = [], topixDiffData = [];
-    let prevEval = null, prevTopix = null;
+    let prevTopix = null;
+
     for (let i = 0; i < dateList30.length; i++) {
       const ds = dateList30[i];
       const [,mm,dd] = ds.split('-');
       xL.push(parseInt(mm)+'/'+parseInt(dd));
-      const curEval = evalMap[ds] !== undefined ? evalMap[ds] : null;
-      const curTopix = topixMap[ds] !== undefined ? topixMap[ds] : null;
-      if (curEval !== null && prevEval !== null) {
+
+      const curSnap = snapMap[ds];
+      // 前日のスナップを探す（直前の記録日）
+      const prevSnaps = snapSorted.filter(p => p.date < ds);
+      const prevSnap = prevSnaps.length > 0 ? prevSnaps[prevSnaps.length-1] : null;
+
+      // 当日売買があったか判定
+      const hasTrade = (S.trades||[]).some(t => t.date === ds);
+
+      if (curSnap && prevSnap && !hasTrade) {
+        // unrealizedの変化 + totalCostの変化を合算して評価額変化を出す
+        const curEval = (curSnap.totalCost||0) + (curSnap.unrealized||0);
+        const prevEval = (prevSnap.totalCost||0) + (prevSnap.unrealized||0);
+        // しかし売買なしなのにtotalCostが変わる場合（配当等）は除外しない
         diffData.push(curEval - prevEval);
+      } else if (ds === todayStr && totalDiffToday !== null) {
+        // 今日分はリアルタイム計算値を使う
+        diffData.push(totalDiffToday);
       } else {
         diffData.push(null);
       }
+
+      const curTopix = topixMap[ds] !== undefined ? topixMap[ds] : null;
       if (curTopix !== null && prevTopix !== null) {
         topixDiffData.push(((curTopix - prevTopix) / prevTopix) * 100);
       } else {
         topixDiffData.push(null);
       }
-      if (curEval !== null) prevEval = curEval;
       if (curTopix !== null) prevTopix = curTopix;
     }
 
