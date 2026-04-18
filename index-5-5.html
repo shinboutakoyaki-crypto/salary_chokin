@@ -1630,8 +1630,8 @@ function setAssetMode(mode) {
   const pb = el('linePeriodBtns');
   if (pb) pb.style.display = mode === 'diff' ? 'none' : '';
   const sub = el('pnlSubToggle'); if (sub) sub.style.display = 'none';
-  const nav = el('monthlyNavBar'); if (nav) nav.style.display = (mode!=='diff' && linePeriod==='monthly') ? '' : 'none';
-  const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = (mode!=='diff' && linePeriod==='yearly') ? '' : 'none';
+  const nav = el('monthlyNavBar'); if (nav) nav.style.display = (mode === 'diff' || linePeriod === 'monthly') ? '' : 'none';
+  const ynav = el('yearlyNavBar'); if (ynav) ynav.style.display = (mode !== 'diff' && linePeriod === 'yearly') ? '' : 'none';
   renderLineChart();
 }
 
@@ -1955,12 +1955,12 @@ function renderLineChart() {
     // snap.unrealized の差分（totalCostの変化を除く）= 純粋な株価変動分の近似
     const snapSorted = (S.pnlHistory||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
 
-    const days30 = 30;
-    const today5 = new Date();
+    // 選択中の月の日付リストを生成
+    const [diffY, diffM] = lineMonth.split('-').map(Number);
+    const diffDim = new Date(diffY, diffM, 0).getDate();
     const dateList30 = [];
-    for (let i = days30-1; i >= 0; i--) {
-      const d = new Date(today5); d.setDate(d.getDate()-i);
-      dateList30.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+    for (let d = 1; d <= diffDim; d++) {
+      dateList30.push(lineMonth + '-' + String(d).padStart(2, '0'));
     }
 
     // 日付→スナップマップ
@@ -1975,7 +1975,7 @@ function renderLineChart() {
     for (let i = 0; i < dateList30.length; i++) {
       const ds = dateList30[i];
       const [,mm,dd] = ds.split('-');
-      xL.push(parseInt(mm)+'/'+parseInt(dd));
+      xL.push(parseInt(dd)+'日');
 
       const curSnap = snapMap[ds];
       // 前日のスナップを探す（直前の記録日）
