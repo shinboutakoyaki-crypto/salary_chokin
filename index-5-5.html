@@ -1892,7 +1892,7 @@ function renderLineChart() {
           },
           y: {
             min: yMin, max: yMax, position: 'left',
-            ticks: { color:'#94a3b8', callback: v=>fmtMan2(v)+'円', font:{size:11}, maxTicksLimit:4 },
+            ticks: { color:'#94a3b8', callback: v=>_amountsHidden?'***':fmtMan2(v)+'円', font:{size:11}, maxTicksLimit:4 },
             grid: { color:'rgba(148,163,184,.1)' }
           }
         }
@@ -2062,7 +2062,7 @@ function renderLineChart() {
             min: -dBound, max: dBound,
             ticks: {
               color:'#94a3b8', font:{size:11}, maxTicksLimit:5,
-              callback: v => (v>=0?'+':'')+Math.round(v/1000)+'千'
+              callback: v => _amountsHidden ? '***' : (v>=0?'+':'')+Math.round(v/1000)+'千'
             },
             grid: { color:'rgba(148,163,184,.1)' }
           }
