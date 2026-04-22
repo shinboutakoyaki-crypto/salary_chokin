@@ -811,36 +811,59 @@ function save(){
 // ── Yahoo Finance から取得（プロキシ経由） ────────────────
 function fetchPriceYahoo(ticker,market){
   var PROXIES=[
-    'https://api.allorigins.win/raw?url=',
     'https://corsproxy.io/?url=',
+    'https://api.allorigins.win/raw?url=',
+    'https://thingproxy.freeboard.io/fetch/',
     'https://api.codetabs.com/v1/proxy?quest='
   ];
-  var syms=market==='JP'?[ticker+'.T',ticker+'.S',ticker+'.N',ticker+'.F']:[ticker];
+
+  // シンボル候補
+  var syms = market==='JP'
+    ? [ticker+'.T', ticker+'.S', ticker+'.N', ticker+'.F']
+    : [ticker];
+
+  // 単一URLをfetch（タイムアウト付き）
   function fetchOneUrl(url){
     return new Promise(function(res){
       var ctrl=new AbortController();
-      var tid=setTimeout(function(){ctrl.abort();res(null);},5000);
-      fetch(url,{signal:ctrl.signal}).then(function(r){
+      var tid=setTimeout(function(){ctrl.abort();res(null);},6000);
+      fetch(url,{signal:ctrl.signal,mode:'cors'}).then(function(r){
         clearTimeout(tid);
         if(!r.ok){res(null);return null;}
         return r.json();
       }).then(function(d){
         if(!d){res(null);return;}
+        // v8 chart API
         var result=d.chart&&d.chart.result&&d.chart.result[0];
         var meta=result&&result.meta;
-        var p=meta?(meta.regularMarketPrice||meta.chartPreviousClose):null;
-        var prev=meta?(meta.previousClose||meta.chartPreviousClose):null;
-        if(p&&p>0)res({price:parseFloat(p),prevClose:(prev&&prev>0)?parseFloat(prev):null,source:'yahoo'});
-        else res(null);
+        if(meta){
+          var p=meta.regularMarketPrice||meta.chartPreviousClose;
+          var prev=meta.previousClose||meta.chartPreviousClose;
+          if(p&&p>0){res({price:parseFloat(p),prevClose:(prev&&prev>0)?parseFloat(prev):null,source:'yahoo_v8'});return;}
+        }
+        // v7 quote API
+        var quote=d.quoteResponse&&d.quoteResponse.result&&d.quoteResponse.result[0];
+        if(quote){
+          var p2=quote.regularMarketPrice;
+          var prev2=quote.regularMarketPreviousClose;
+          if(p2&&p2>0){res({price:parseFloat(p2),prevClose:(prev2&&prev2>0)?parseFloat(prev2):null,source:'yahoo_v7'});return;}
+        }
+        res(null);
       }).catch(function(){clearTimeout(tid);res(null);});
     });
   }
+
+  // 1シンボルをv8・v7両方のURLで並列試行
   function tryOneSym(sym){
     return new Promise(function(resolve){
       var done=false;
       var yUrls=[
+        // v8 chart (2d range で前日終値も取得)
         'https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d',
-        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d'
+        'https://query2.finance.yahoo.com/v8/finance/chart/'+sym+'?interval=1d&range=2d',
+        // v7 quote (シンプル・軽量)
+        'https://query1.finance.yahoo.com/v7/finance/quote?symbols='+sym,
+        'https://query2.finance.yahoo.com/v7/finance/quote?symbols='+sym,
       ];
       var allUrls=[];
       PROXIES.forEach(function(px){
@@ -852,13 +875,49 @@ function fetchPriceYahoo(ticker,market){
           if(done)return;
           if(p!==null){done=true;resolve(p);return;}
           remaining--;
-          if(remaining===0){done=true;resolve(null);}
+          if(remaining===0&&!done){done=true;resolve(null);}
         });
       });
     });
   }
+
+  // stooq CSVフォールバック（日本株のみ）
+  function tryStooq(ticker){
+    return new Promise(function(resolve){
+      var sym=ticker+'.jp';
+      var url='https://stooq.com/q/l/?s='+sym+'&f=sd2t2ohlcv&h&e=csv';
+      var allUrls=PROXIES.map(function(px){return px+encodeURIComponent(url);});
+      var done2=false;
+      var rem2=allUrls.length;
+      allUrls.forEach(function(u){
+        var ctrl=new AbortController();
+        var tid=setTimeout(function(){ctrl.abort();},6000);
+        fetch(u,{signal:ctrl.signal}).then(function(r){
+          clearTimeout(tid);
+          return r.ok?r.text():null;
+        }).then(function(t){
+          if(done2)return;
+          if(t){
+            var lines=t.trim().split('\n');
+            if(lines.length>=2){
+              var cols=lines[1].split(',');
+              var p=parseFloat(cols[4]); // Close
+              if(p&&p>0){done2=true;resolve({price:p,prevClose:null,source:'stooq'});return;}
+            }
+          }
+          rem2--;
+          if(rem2===0&&!done2){done2=true;resolve(null);}
+        }).catch(function(){clearTimeout(tid);rem2--;if(rem2===0&&!done2){done2=true;resolve(null);}});
+      });
+    });
+  }
+
   function trySyms(i){
-    if(i>=syms.length)return Promise.resolve(null);
+    if(i>=syms.length){
+      // 全シンボル失敗 → stooqフォールバック（JP株のみ）
+      if(market==='JP') return tryStooq(ticker);
+      return Promise.resolve(null);
+    }
     return tryOneSym(syms[i]).then(function(p){
       return p!==null?p:trySyms(i+1);
     });
@@ -3779,8 +3838,9 @@ function autoFillName(){
   var market=(el('t_market')||{value:'JP'}).value;
   var syms=market==='JP'?[ticker+'.T',ticker+'.S',ticker+'.N',ticker+'.F']:[ticker];
   var PROXIES=[
-    'https://api.allorigins.win/raw?url=',
     'https://corsproxy.io/?url=',
+    'https://api.allorigins.win/raw?url=',
+    'https://thingproxy.freeboard.io/fetch/',
     'https://api.codetabs.com/v1/proxy?quest='
   ];
   var HOSTS=['query1.finance.yahoo.com','query2.finance.yahoo.com'];
