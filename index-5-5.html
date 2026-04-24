@@ -2095,19 +2095,36 @@ function renderLineChart() {
     const dPad = dMax * 0.3 || 10000;
     const dBound = Math.ceil((dMax + dPad) / 10000) * 10000;
 
+    // TOPIXをdBoundスケールに正規化（最大%をdBoundに合わせる）
+    const topixAbsMax = Math.max(...topixDiffData.filter(v=>v!==null).map(Math.abs), 0.001);
+    const topixScaledData = topixDiffData.map(v => v===null ? null : v / topixAbsMax * dBound * 0.85);
+
     charts['line'] = new Chart(canvas, {
       type: 'bar',
       data: {
         labels: xL,
         datasets: [
           {
+            label: 'TOPIX',
+            data: topixScaledData,
+            backgroundColor: topixScaledData.map(v => v===null ? 'transparent' : v>=0 ? 'rgba(148,163,184,.4)' : 'rgba(100,116,139,.4)'),
+            borderColor: topixScaledData.map(v => v===null ? 'transparent' : v>=0 ? 'rgba(148,163,184,.7)' : 'rgba(100,116,139,.7)'),
+            borderWidth: 1,
+            borderRadius: 2,
+            borderSkipped: false,
+            barPercentage: 0.3,
+            categoryPercentage: 1.0,
+            order: 2,
+          },
+          {
             label: '前日比(円)',
             data: diffData,
-            backgroundColor: diffData.map(v => v === null ? 'transparent' : v >= 0 ? 'rgba(220,38,38,.8)' : 'rgba(29,111,232,.8)'),
-            borderColor: diffData.map(v => v === null ? 'transparent' : v >= 0 ? '#dc2626' : '#1d6fe8'),
-            borderWidth: 1,
-            borderRadius: 3,
-            yAxisID: 'yLeft',
+            backgroundColor: diffData.map(v => v===null ? 'transparent' : v>=0 ? 'rgba(220,38,38,.9)' : 'rgba(29,111,232,.9)'),
+            borderRadius: 4,
+            borderSkipped: false,
+            barPercentage: 0.75,
+            categoryPercentage: 1.0,
+            order: 1,
           }
         ]
       },
@@ -2118,7 +2135,13 @@ function renderLineChart() {
           tooltip: {
             callbacks: {
               label: c2 => {
-                const v = c2.raw; if (v === null) return '';
+                if (c2.dataset.label === 'TOPIX') {
+                  const i = c2.dataIndex;
+                  const v = topixDiffData[i];
+                  if (v===null) return '';
+                  return `TOPIX前日比: ${v>=0?'+':''}${v.toFixed(2)}%`;
+                }
+                const v = c2.raw; if (v===null) return '';
                 return `前日比: ${v>=0?'+':''}¥${Math.round(v).toLocaleString()}`;
               }
             }
@@ -2129,7 +2152,7 @@ function renderLineChart() {
             ticks: { color:'#94a3b8', maxRotation:0, maxTicksLimit:10, font:{size:11} },
             grid: { display: false }
           },
-          yLeft: {
+          y: {
             type: 'linear', position: 'left',
             min: -dBound, max: dBound,
             ticks: {
