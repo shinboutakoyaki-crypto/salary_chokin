@@ -1351,16 +1351,9 @@ function renderHoldings(){
     });
   }
 
-  // 配当合計（broker+銘柄別）
+  // 配当合計（銘柄別）
   const divByTicker={};
-  for(const d of S.dividends){
-    // broker込みキー（brokerが一致するものだけ集計）
-    const bk=(d.broker||'')+'__'+d.market+'_'+d.ticker;
-    divByTicker[bk]=(divByTicker[bk]||0)+d.amount;
-    // brokerなしキー（後方互換）
-    const pk=d.market+'_'+d.ticker;
-    divByTicker[pk]=(divByTicker[pk]||0)+d.amount;
-  }
+  for(const d of S.dividends){const pk=d.market+'_'+d.ticker;divByTicker[pk]=(divByTicker[pk]||0)+d.amount;}
 
   container.innerHTML=keys.map(k=>{
     const hd=h[k],p=S.prices[hd.priceKey]||null;
@@ -1376,8 +1369,7 @@ function renderHoldings(){
     const cost=hd.avgCost*hd.qty,val=p?p*hd.qty:null;
     const unr=val?val-cost:null,unrP=cost>0&&unr!==null?(unr/cost)*100:null;
     const realized=hd.realizedPnl||0;
-    const bkDiv=(hd.broker||'')+'__'+hd.priceKey;
-    const dividend=divByTicker[bkDiv]!==undefined?divByTicker[bkDiv]:(divByTicker[hd.priceKey]||0);
+    const dividend=divByTicker[hd.priceKey]||0;
     const total=unr!==null?unr+realized+dividend:realized+dividend;
     const dod=getDodForTicker(hd.priceKey); // 前日比
     const dayChange=dod?Math.round(dod.change*hd.qty):null; // 保有株数×前日比
@@ -2471,7 +2463,7 @@ function renderPnlRanking() {
               </div>
               <div style="text-align:right">
                 <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${color}">${isUp?'+':''}${r.changePct.toFixed(2)}%</span>
-                <div style="font-size:10px;color:${color}">${isUp?'+':''}¥${Math.round(r.changeAmt).toLocaleString()}</div>
+                <div style="font-size:10px;color:${color}">${_amountsHidden ? '***' : (isUp?'+':'')+'¥'+Math.round(r.changeAmt).toLocaleString()}</div>
               </div>
             </div>
             <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
@@ -2643,7 +2635,7 @@ function renderStockSummary() {
   const h = computeHoldings();
   const container = el('stockSummaryGrid');
 
-  // broker込みで配当を集計（brokerがない場合は空文字として扱う）
+  // broker込みで配当を集計
   const divByBrokerTicker = {};
   for (const d of S.dividends) {
     const bk = (d.broker||'')+'__'+d.market+'_'+d.ticker;
@@ -2659,26 +2651,12 @@ function renderStockSummary() {
   // broker+priceKeyでユニークなキーを作成（口座別に分ける）
   const brokerTradeKeys = [...new Set(S.trades.map(t => (t.memo||'')+'__'+priceKey(t.market,t.ticker)))];
 
-  // インカム銘柄（配当のみ登録）を追加
-  // ※取引がある銘柄でも「配当のみ」として登録されてる場合は追加する
+  // インカム銘柄（取引なし・配当のみ）も追加
   const incomeKeys = [];
   if (S.incomeAssets && S.incomeAssets.length) {
     for (const ia of S.incomeAssets) {
       const bk2 = '__'+(ia.market||'JP')+'_'+ia.ticker;
-      // 取引がある銘柄（brokerTradeKeys）には含まれてても別扱いで追加
-      if (!incomeKeys.includes(bk2)) incomeKeys.push(bk2);
-    }
-  }
-
-  // 配当データにbrokerがなくてincomeKeysにもない場合、配当データからも追加
-  for (const d of S.dividends) {
-    if (!d.broker) {
-      const bk2 = '__'+d.market+'_'+d.ticker;
-      const alreadyInTrades = brokerTradeKeys.includes(bk2);
-      const alreadyInIncome = incomeKeys.includes(bk2);
-      if (!alreadyInTrades && !alreadyInIncome) {
-        incomeKeys.push(bk2);
-      }
+      if (!brokerTradeKeys.includes(bk2) && !incomeKeys.includes(bk2)) incomeKeys.push(bk2);
     }
   }
 
@@ -2719,10 +2697,7 @@ function renderStockSummary() {
     const price = S.prices[k] || null;
     const unrealized = qty > 0 && price ? (price - avgCost) * qty : 0;
     const realized = realizedPnl || 0;
-    // broker込みキーで配当を探す → なければbrokerなしキー → なければpriceKeyのみ
-    const dividend = divByBrokerTicker[bk] !== undefined
-      ? divByBrokerTicker[bk]
-      : (divByBrokerTicker['__'+k] !== undefined ? divByBrokerTicker['__'+k] : (divByTicker[k] || 0));
+    const dividend = divByBrokerTicker[bk] !== undefined ? divByBrokerTicker[bk] : (divByTicker[k] || 0);
     const total = unrealized + realized + dividend;
     const isHolding = qty > 0;
     const isIncomeOnly = incomeKeys.includes(bk) && !brokerTradeKeys.includes(bk);
@@ -4518,6 +4493,7 @@ function toggleHideAmounts() {
   // グラフのY軸も再描画
   renderLineChart();
   renderDivChart();
+  renderPnlRanking();
 }
 
 const el=id=>document.getElementById(id);
