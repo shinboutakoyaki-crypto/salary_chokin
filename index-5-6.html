@@ -3972,9 +3972,12 @@ function renderMonthlyReport() {
   const totalDays = winDays + loseDays;
   const winRate = totalDays > 0 ? Math.round(winDays / totalDays * 100) : null;
 
-  // 当月配当
+  // 当月配当・優待
   const monthDiv = (S.dividends||[])
-    .filter(d => d.date && d.date.startsWith(ym))
+    .filter(d => d.date && d.date.startsWith(ym) && d.type !== 'yutai')
+    .reduce((s,d) => s + (d.amount||0), 0);
+  const monthYutai = (S.dividends||[])
+    .filter(d => d.date && d.date.startsWith(ym) && d.type === 'yutai')
     .reduce((s,d) => s + (d.amount||0), 0);
 
   // 含み益・含み損トップ3
@@ -4054,6 +4057,13 @@ function renderMonthlyReport() {
       <div style="background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08);display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:12px;font-weight:700;color:#64748b">💴 今月の配当受取</div>
         <div style="font-size:18px;font-weight:800;color:#d97706;font-family:'Barlow','Noto Sans JP',sans-serif">+¥${Math.round(monthDiv).toLocaleString()}</div>
+      </div>` : ''}
+
+      <!-- 優待受取 -->
+      ${monthYutai > 0 ? `
+      <div style="background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 2px 12px rgba(29,111,232,.08);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;font-weight:700;color:#64748b">🎁 今月の優待</div>
+        <div style="font-size:18px;font-weight:800;color:#7c3aed;font-family:'Barlow','Noto Sans JP',sans-serif">+¥${Math.round(monthYutai).toLocaleString()}</div>
       </div>` : ''}
 
       <!-- 資産推移チャート -->
@@ -4347,24 +4357,25 @@ function renderCalendar() {
 
   // 日別データ集計
   const ymStr = calYear + '-' + String(calMonth+1).padStart(2,'0');
-  const dayMap = {}; // { "2025-06-05": { pnl: 0, div: 0 } }
+  const dayMap = {}; // { "2025-06-05": { pnl: 0, div: 0, yutai: 0 } }
 
   // 実現損益（売却）
   for (const t of S.trades) {
     if (t.type !== 'sell' || !t.date.startsWith(ymStr)) continue;
-    if (!dayMap[t.date]) dayMap[t.date] = { pnl: 0, div: 0 };
+    if (!dayMap[t.date]) dayMap[t.date] = { pnl: 0, div: 0, yutai: 0 };
     dayMap[t.date].pnl += t.realizedPnl || 0;
   }
-  // 配当
+  // 配当・優待（typeで振り分け）
   for (const d of S.dividends) {
     if (!d.date.startsWith(ymStr)) continue;
-    if (!dayMap[d.date]) dayMap[d.date] = { pnl: 0, div: 0 };
-    dayMap[d.date].div += d.amount || 0;
+    if (!dayMap[d.date]) dayMap[d.date] = { pnl: 0, div: 0, yutai: 0 };
+    if (d.type === 'yutai') dayMap[d.date].yutai += d.amount || 0;
+    else dayMap[d.date].div += d.amount || 0;
   }
 
   // 月間合計
-  let totalPnl = 0, totalDiv = 0;
-  Object.values(dayMap).forEach(v => { totalPnl += v.pnl; totalDiv += v.div; });
+  let totalPnl = 0, totalDiv = 0, totalYutai = 0;
+  Object.values(dayMap).forEach(v => { totalPnl += v.pnl; totalDiv += v.div; totalYutai += v.yutai || 0; });
 
   // カレンダーグリッド生成
   const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
@@ -4384,6 +4395,7 @@ function renderCalendar() {
     const data = dayMap[dateStr];
     const hasPnl = data && Math.round(data.pnl) !== 0;
     const hasDiv = data && Math.round(data.div) > 0;
+    const hasYutai = data && Math.round(data.yutai || 0) > 0;
 
     const numColor = dow === 0 ? 'var(--red)' : dow === 6 ? 'var(--accent)' : 'var(--text)';
     const bgStyle = isToday ? 'background:var(--accent);border-radius:6px;' : '';
@@ -4397,6 +4409,10 @@ function renderCalendar() {
     if (hasDiv) {
       const divVal = Math.round(data.div);
       subHtml += `<div style="font-size:9px;font-weight:700;color:var(--yellow);line-height:1.2">${(divVal>=10000?(divVal/10000).toFixed(0)+'万':divVal.toLocaleString())}</div>`;
+    }
+    if (hasYutai) {
+      const yVal = Math.round(data.yutai);
+      subHtml += `<div style="font-size:9px;font-weight:700;color:#7c3aed;line-height:1.2">🎁${(yVal>=10000?(yVal/10000).toFixed(0)+'万':yVal.toLocaleString())}</div>`;
     }
 
     html += `<div onclick="calSelectDay('${dateStr}')" style="min-height:52px;padding:4px 2px;text-align:center;cursor:pointer;border-radius:8px;transition:background .15s;${data?'background:rgba(29,111,232,.04)':''}" onmouseover="this.style.background='rgba(29,111,232,.08)'" onmouseout="this.style.background='${data?'rgba(29,111,232,.04)':''}'">
@@ -4416,10 +4432,11 @@ function renderCalendar() {
       <div style="text-align:center;padding:10px 0;border-left:1px solid var(--border);border-right:1px solid var(--border)">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">配当金</div>
         <div style="font-size:15px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--yellow)">¥${Math.round(totalDiv).toLocaleString()}</div>
+        ${totalYutai>0?`<div style="font-size:9px;font-weight:700;color:#7c3aed;margin-top:2px">🎁優待 ¥${Math.round(totalYutai).toLocaleString()}</div>`:''}
       </div>
       <div style="text-align:center;padding:10px 0">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">合計</div>
-        <div style="font-size:15px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent)">¥${Math.round(totalPnl+totalDiv).toLocaleString()}</div>
+        <div style="font-size:15px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--accent)">¥${Math.round(totalPnl+totalDiv+totalYutai).toLocaleString()}</div>
       </div>
     </div>
   `;
@@ -4458,15 +4475,18 @@ function calSelectDay(dateStr) {
             </div>
             <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${(t.realizedPnl||0)>=0?'var(--green)':'var(--red)'}">¥${Math.round(Math.abs(t.realizedPnl||0)).toLocaleString()}</span>
           </div>`).join('')}
-        ${divs.map(d => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(217,119,6,.06);border-radius:8px">
+        ${divs.map(d => {
+          const isY = d.type === 'yutai';
+          return `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${isY?'rgba(124,58,237,.06)':'rgba(217,119,6,.06)'};border-radius:8px">
             <div>
               <span class="ticker ticker-jp" style="font-size:13px">${d.ticker}</span>
               <span style="font-size:11px;color:var(--text3);margin-left:5px">${d.name||''}</span>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">配当金</div>
+              <div style="font-size:10px;color:${isY?'#7c3aed':'var(--text3)'};margin-top:2px;font-weight:${isY?'700':'400'}">${isY?'🎁 優待':'配当金'}</div>
             </div>
-            <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:var(--yellow)">¥${Math.round(d.amount).toLocaleString()}</span>
-          </div>`).join('')}
+            <span style="font-size:14px;font-weight:700;font-family:'Barlow','Noto Sans JP',sans-serif;color:${isY?'#7c3aed':'var(--yellow)'}">¥${Math.round(d.amount).toLocaleString()}</span>
+          </div>`;
+        }).join('')}
         ${(sells.length||divs.length)&&(sells.length+divs.length>1)?`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border2)">
           <span style="font-size:12px;font-weight:700;color:var(--text2)">合計</span>
