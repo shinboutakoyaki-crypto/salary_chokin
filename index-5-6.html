@@ -1351,6 +1351,9 @@ function renderHoldings(){
   // 配当合計（銘柄別）
   const divByTicker={};
   for(const d of S.dividends){const pk=d.market+'_'+d.ticker;divByTicker[pk]=(divByTicker[pk]||0)+d.amount;}
+  // broker込み配当合計（口座別に正確に集計）
+  const divByBrokerTickerH={};
+  for(const d of S.dividends){const bk=(d.broker||'')+'__'+d.market+'_'+d.ticker;divByBrokerTickerH[bk]=(divByBrokerTickerH[bk]||0)+d.amount;}
 
   container.innerHTML=keys.map(k=>{
     const hd=h[k],p=S.prices[hd.priceKey]||null;
@@ -1366,7 +1369,8 @@ function renderHoldings(){
     const cost=hd.avgCost*hd.qty,val=p?p*hd.qty:null;
     const unr=val?val-cost:null,unrP=cost>0&&unr!==null?(unr/cost)*100:null;
     const realized=hd.realizedPnl||0;
-    const dividend=divByTicker[hd.priceKey]||0;
+    const _divBrokerKey=(hd.broker||'')+'__'+hd.priceKey;
+    const dividend=divByBrokerTickerH[_divBrokerKey]!==undefined?divByBrokerTickerH[_divBrokerKey]:(divByTicker[hd.priceKey]||0);
     const total=unr!==null?unr+realized+dividend:realized+dividend;
     const dod=getDodForTicker(hd.priceKey); // 前日比
     const dayChange=dod?Math.round(dod.change*hd.qty):null; // 保有株数×前日比
